@@ -1,0 +1,16 @@
+{
+    "name": "asus/alumni-system",
+    "description": "Alumni System project",
+    "type": "project",
+    "require": {
+        "dompdf/dompdf": "^3.1",
+        "phpoffice/phpspreadsheet": "^5.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "license": "MIT"
+}
