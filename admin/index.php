@@ -1,20 +1,16 @@
 <?php
 require_once '../includes/admin_header.php';
 
-// Get counts
 $total_alumni = $pdo->query("SELECT COUNT(*) FROM alumni")->fetchColumn();
 $employed = $pdo->query("SELECT COUNT(*) FROM employment WHERE status IN ('Employed','Self-Employed')")->fetchColumn();
 $employment_rate = $total_alumni ? round(($employed / $total_alumni) * 100, 1) : 0;
 $active_jobs = $pdo->query("SELECT COUNT(*) FROM job_postings WHERE status='active'")->fetchColumn();
 
-// Top industry
 $industry = $pdo->query("SELECT industry, COUNT(*) as cnt FROM employment WHERE industry IS NOT NULL GROUP BY industry ORDER BY cnt DESC LIMIT 1")->fetch();
 $top_industry = $industry ? $industry['industry'] : 'N/A';
 
-// Recent registrations with profile pictures
 $recent = $pdo->query("SELECT * FROM alumni ORDER BY id DESC LIMIT 5")->fetchAll();
 
-// Employment distribution for pie chart
 $dist = $pdo->query("SELECT status, COUNT(*) as count FROM employment GROUP BY status")->fetchAll();
 $status_counts = [];
 foreach ($dist as $row) {
@@ -25,6 +21,7 @@ $chart_data = [];
 foreach ($categories as $cat) {
     $chart_data[$cat] = $status_counts[$cat] ?? 0;
 }
+$total_employed = $employed ?: 1; // avoid division by zero
 ?>
 <div class="page-header">
     <h1>Dashboard</h1>
@@ -120,9 +117,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: { boxWidth: 12 }
+                    legend: { position: 'bottom', labels: { boxWidth: 12 } },
+                    datalabels: {
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 3,
+                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value, context) => {
+                            let total = context.dataset.data.reduce((a,b) => a + b, 0);
+                            let percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                            return percentage;
+                        }
                     }
                 }
             }

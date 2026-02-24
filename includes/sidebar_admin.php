@@ -1,6 +1,6 @@
 <aside class="sidebar">
     <div class="sidebar-logo">
-        <img src="<?= SITE_URL ?>/assets/img/sagax-city-logo.png" alt="USAT">
+        <img src="<?= SITE_URL ?>/assets/img/usat-logo.jpg" alt="USAT Logo">
     </div>
     <nav class="nav flex-column">
         <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : '' ?>" href="index.php">
@@ -12,7 +12,7 @@
         <a class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'tracer_module') !== false ? 'active' : '' ?>" href="tracer_module.php">
             <i class="fas fa-chart-line"></i> Tracer Module
         </a>
-        <a class="nav-link <?= strpos($_SERVER['PHP_SELF'], 'job_postings') !== false ? 'active' : '' ?>" href="job_postings.php">
+        <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'job_postings.php' ? 'active' : '' ?>" href="job_postings.php">
             <i class="fas fa-briefcase"></i> Job Postings
         </a>
         <a class="nav-link <?= basename($_SERVER['PHP_SELF']) == 'analytics.php' ? 'active' : '' ?>" href="analytics.php">
@@ -38,5 +38,3 @@
         </a>
     </nav>
 </aside>
-<div class="main-content">
-    <!-- Page content will be injected here -->

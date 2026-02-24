@@ -1,18 +1,70 @@
 <?php
 require_once '../includes/admin_header.php';
-$skills = [
-    ['industry' => 'Information Technology', 'match' => 65, 'gap' => 35, 'skills' => ['Cloud Computing','AI/ML','Cybersecurity','DevOps'], 'rec' => ['Offer cloud certification','Introduce AI/ML courses']],
-    ['industry' => 'Accounting', 'match' => 75, 'gap' => 25, 'skills' => ['Data Analytics','ERP Systems','Financial Modeling'], 'rec' => ['Include data analytics','ERP training']],
-    ['industry' => 'Marketing', 'match' => 60, 'gap' => 40, 'skills' => ['Social Media','Analytics','Content Creation'], 'rec' => ['Digital marketing focus','Google Analytics certification']],
+
+// Get program-industry distribution
+$program_industries = $pdo->query("
+    SELECT a.program, e.industry, COUNT(*) as cnt
+    FROM alumni a
+    JOIN employment e ON a.id = e.alumni_id
+    WHERE e.industry IS NOT NULL
+    GROUP BY a.program, e.industry
+")->fetchAll();
+
+// For each program, calculate match percentage for top industries
+$skills = [];
+$programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FETCH_COLUMN);
+$industries = $pdo->query("SELECT DISTINCT industry FROM employment WHERE industry IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
+
+// Dummy required skills per industry (could be stored in a table)
+$required_skills = [
+    'Information Technology' => ['Cloud Computing', 'AI/ML', 'Cybersecurity', 'DevOps', 'Mobile Development'],
+    'Accounting' => ['Data Analytics', 'ERP Systems', 'Financial Modeling', 'Compliance'],
+    'Marketing' => ['Social Media', 'Analytics', 'Content Creation', 'SEO'],
+    'Finance' => ['Financial Analysis', 'Risk Management', 'Excel', 'Bloomberg'],
+    'Education' => ['Curriculum Design', 'Teaching', 'Assessment', 'EdTech'],
 ];
+
+$recommendations = [
+    'Information Technology' => ['Offer cloud certification', 'Introduce AI/ML courses', 'Partner with tech companies'],
+    'Accounting' => ['Include data analytics in curriculum', 'Provide hands-on ERP training'],
+    'Marketing' => ['Update marketing curriculum with digital focus', 'Offer Google Analytics certification'],
+];
+
+foreach ($program_industries as $row) {
+    $program = $row['program'];
+    $industry = $row['industry'];
+    $cnt = $row['cnt'];
+    
+    // Get total alumni in program
+    $total_program = $pdo->prepare("SELECT COUNT(*) FROM alumni WHERE program = ?");
+    $total_program->execute([$program]);
+    $total = $total_program->fetchColumn();
+    
+    $match = $total ? round(($cnt / $total) * 100, 1) : 0;
+    $gap = 100 - $match;
+    
+    $skills[] = [
+        'program' => $program,
+        'industry' => $industry,
+        'match' => $match,
+        'gap' => $gap,
+        'required' => $required_skills[$industry] ?? ['General skills'],
+        'rec' => $recommendations[$industry] ?? ['Review curriculum']
+    ];
+}
 ?>
 <div class="page-header">
     <h1>Skills Gap Analysis</h1>
+    <p class="text-muted">Program vs Industry match based on employment data</p>
 </div>
+
+<?php if (empty($skills)): ?>
+    <div class="alert alert-warning">No data available. Please ensure employment records have industry information.</div>
+<?php endif; ?>
 
 <?php foreach ($skills as $s): ?>
 <div class="card mb-4">
-    <div class="card-header"><?= $s['industry'] ?></div>
+    <div class="card-header"><?= htmlspecialchars($s['program']) ?> → <?= htmlspecialchars($s['industry']) ?></div>
     <div class="card-body">
         <div class="row align-items-center">
             <div class="col-md-6">
@@ -23,9 +75,9 @@ $skills = [
                 </div>
             </div>
             <div class="col-md-6">
-                <h6>Required Skills:</h6>
+                <h6>Required Skills for <?= htmlspecialchars($s['industry']) ?>:</h6>
                 <ul>
-                    <?php foreach ($s['skills'] as $skill): ?><li><?= $skill ?></li><?php endforeach; ?>
+                    <?php foreach ($s['required'] as $skill): ?><li><?= $skill ?></li><?php endforeach; ?>
                 </ul>
                 <h6>Recommendations:</h6>
                 <ul>

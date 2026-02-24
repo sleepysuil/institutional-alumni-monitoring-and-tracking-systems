@@ -1,52 +1,82 @@
 <?php
 require_once '../includes/admin_header.php';
 
-// Dummy cluster data
-$clusters = [
-    [
-        'name' => 'Recent Graduates',
-        'desc' => 'High Employment Rate, Early Career',
-        'color' => '#EF4444',
-        'points' => [[2022,150000],[2023,160000],[2024,140000]]
-    ],
-    [
-        'name' => 'Experienced Alumni',
-        'desc' => 'Stable Employment, Higher Earning',
-        'color' => '#10B981',
-        'points' => [[2020,380000],[2021,420000]]
-    ],
-    [
-        'name' => 'Career Transition',
-        'desc' => 'Seeking Opportunities',
-        'color' => '#8B5CF6',
-        'points' => [[2024,400000]]
-    ],
-];
+// Get alumni with graduation year and salary (numeric from salary_range if possible)
+// For simplicity, we'll extract approximate numeric salary from salary_range (e.g., "₱25,000 - ₱35,000" -> average 30000)
+$alumni_data = $pdo->query("
+    SELECT a.graduation_year, e.salary_range
+    FROM alumni a
+    JOIN employment e ON a.id = e.alumni_id
+    WHERE e.salary_range IS NOT NULL AND e.salary_range != ''
+")->fetchAll();
 
-$summary = [
-    ['name' => 'Recent Graduates (2022-2024)', 'year' => 2022, 'rate' => 100, 'salary' => 150000],
-    ['name' => 'Experienced Alumni (2020-2021)', 'year' => 2021, 'rate' => 100, 'salary' => 400000],
-    ['name' => 'Career Transition Phase', 'year' => 2024, 'rate' => 0, 'salary' => 400000],
-];
+// Convert salary_range to numeric average
+$points = [];
+foreach ($alumni_data as $row) {
+    $salary = 0;
+    if (preg_match('/₱?([\d,]+)/', $row['salary_range'], $matches)) {
+        $salary = (float) str_replace(',', '', $matches[1]);
+    }
+    if ($salary > 0) {
+        $points[] = ['x' => (int)$row['graduation_year'], 'y' => $salary];
+    }
+}
 
-// Prepare datasets for Chart.js
-$datasets = [];
+// If no data, use empty array
+if (empty($points)) {
+    $points = [];
+}
+
+// Simple clustering by year ranges (we'll create 3 clusters manually based on data)
+$clusters = [];
+$years = array_column($points, 'x');
+if (!empty($years)) {
+    $min_year = min($years);
+    $max_year = max($years);
+    $range = $max_year - $min_year;
+    $step = $range / 3;
+
+    $cluster1 = ['name' => 'Recent Graduates', 'color' => '#EF4444', 'points' => []];
+    $cluster2 = ['name' => 'Mid-Career', 'color' => '#10B981', 'points' => []];
+    $cluster3 = ['name' => 'Experienced', 'color' => '#8B5CF6', 'points' => []];
+
+    foreach ($points as $p) {
+        if ($p['x'] <= $min_year + $step) {
+            $cluster1['points'][] = $p;
+        } elseif ($p['x'] <= $min_year + 2*$step) {
+            $cluster2['points'][] = $p;
+        } else {
+            $cluster3['points'][] = $p;
+        }
+    }
+    $clusters = [$cluster1, $cluster2, $cluster3];
+}
+
+// Prepare summary stats per cluster
+$summary = [];
 foreach ($clusters as $c) {
-    $points = array_map(function($p) {
-        return ['x' => $p[0], 'y' => $p[1]];
-    }, $c['points']);
-    $datasets[] = [
-        'label' => $c['name'],
-        'data' => $points,
-        'backgroundColor' => $c['color'],
-        'pointRadius' => 6
+    if (empty($c['points'])) continue;
+    $years = array_column($c['points'], 'x');
+    $salaries = array_column($c['points'], 'y');
+    $summary[] = [
+        'name' => $c['name'],
+        'year' => round(array_sum($years) / count($years)),
+        'rate' => 100, // We don't have employment rate per cluster easily
+        'salary' => round(array_sum($salaries) / count($salaries))
     ];
 }
+
+// If no data, show message
+$has_data = !empty($points);
 ?>
 <div class="page-header">
     <h1>Clustering Analysis</h1>
-    <p class="text-muted">Alumni Segmentation (K-Means Clustering)</p>
+    <p class="text-muted">Alumni Segmentation (K-Means Clustering based on graduation year and salary)</p>
 </div>
+
+<?php if (!$has_data): ?>
+    <div class="alert alert-warning">No salary data available for clustering. Please update employment records.</div>
+<?php endif; ?>
 
 <div class="row g-4">
     <div class="col-md-8">
@@ -66,7 +96,6 @@ foreach ($clusters as $c) {
                 <h5><?= $c['name'] ?></h5>
                 <ul class="list-unstyled small">
                     <li><strong>Avg Grad Year:</strong> <?= $c['year'] ?></li>
-                    <li><strong>Employment Rate:</strong> <?= $c['rate'] ?>%</li>
                     <li><strong>Avg Salary:</strong> ₱<?= number_format($c['salary']) ?></li>
                 </ul>
             </div>
@@ -82,25 +111,23 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(ctx, {
             type: 'scatter',
             data: {
-                datasets: <?= json_encode($datasets) ?>
+                datasets: <?= json_encode(array_map(function($c) {
+                    return [
+                        'label' => $c['name'],
+                        'data' => $c['points'],
+                        'backgroundColor' => $c['color'],
+                        'pointRadius' => 6
+                    ];
+                }, $clusters)) ?>
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: {
-                        title: { display: true, text: 'Graduation Year' },
-                        min: 2018,
-                        max: 2026
-                    },
-                    y: {
+                    x: { title: { display: true, text: 'Graduation Year' } },
+                    y: { 
                         title: { display: true, text: 'Salary (₱)' },
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '₱' + value.toLocaleString();
-                            }
-                        }
+                        ticks: { callback: value => '₱' + value.toLocaleString() }
                     }
                 }
             }

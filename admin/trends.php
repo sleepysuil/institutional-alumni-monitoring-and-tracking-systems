@@ -1,21 +1,44 @@
 <?php
 require_once '../includes/admin_header.php';
-$trends = [
-    ['year' => 2020, 'rate' => 100, 'direction' => '↑ stable', 'prediction' => 100],
-    ['year' => 2021, 'rate' => 100, 'direction' => '↑ stable', 'prediction' => 100],
-    ['year' => 2022, 'rate' => 100, 'direction' => '↑ stable', 'prediction' => 100],
-    ['year' => 2023, 'rate' => 50,  'direction' => '↓ decreasing', 'prediction' => 0],
-    ['year' => 2024, 'rate' => 0,   'direction' => '↓ decreasing', 'prediction' => -50],
-];
+
+// Get employment rate per year
+$yearly = $pdo->query("
+    SELECT a.graduation_year,
+           COUNT(CASE WHEN e.status IN ('Employed','Self-Employed') THEN 1 END) as employed,
+           COUNT(*) as total
+    FROM alumni a
+    LEFT JOIN employment e ON a.id = e.alumni_id
+    GROUP BY a.graduation_year
+    ORDER BY a.graduation_year
+")->fetchAll();
+
+$trends = [];
+$prev_rate = null;
+foreach ($yearly as $y) {
+    $rate = $y['total'] ? round(($y['employed'] / $y['total']) * 100, 1) : 0;
+    if ($prev_rate !== null) {
+        $direction = $rate > $prev_rate ? '↑ increasing' : ($rate < $prev_rate ? '↓ decreasing' : '→ stable');
+    } else {
+        $direction = '→ stable';
+    }
+    $trends[] = [
+        'year' => $y['graduation_year'],
+        'rate' => $rate,
+        'direction' => $direction,
+        'prediction' => $rate // simplistic: same as current
+    ];
+    $prev_rate = $rate;
+}
 ?>
 <div class="page-header">
     <h1>Employment Trend Analysis</h1>
+    <p class="text-muted">Historical trends based on actual data</p>
 </div>
 
 <div class="row g-4">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-header">Historical Trends & Predictions</div>
+            <div class="card-header">Historical Trends</div>
             <div class="card-body">
                 <div class="chart-container">
                     <canvas id="trendChart"></canvas>
@@ -28,14 +51,13 @@ $trends = [
             <div class="card-header">Summary</div>
             <div class="card-body">
                 <table class="table table-sm">
-                    <thead><tr><th>Year</th><th>Rate</th><th>Direction</th><th>Prediction</th></tr></thead>
+                    <thead><tr><th>Year</th><th>Rate</th><th>Direction</th></tr></thead>
                     <tbody>
                         <?php foreach ($trends as $t): ?>
                         <tr>
                             <td><?= $t['year'] ?></td>
                             <td><?= $t['rate'] ?>%</td>
                             <td><?= $t['direction'] ?></td>
-                            <td><?= $t['prediction'] ?>%</td>
                         </tr>
                         <?php endforeach; ?>
                     </tbody>
@@ -52,28 +74,19 @@ document.addEventListener('DOMContentLoaded', function() {
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: [2020,2021,2022,2023,2024],
-                datasets: [
-                    {
-                        label: 'Employment Rate',
-                        data: [100,100,100,50,0],
-                        borderColor: '#EF4444',
-                        backgroundColor: 'rgba(239,68,68,0.1)',
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Prediction',
-                        data: [null,null,null,null,-50],
-                        borderColor: '#8B5CF6',
-                        borderDash: [5,5],
-                        pointRadius: 0
-                    }
-                ]
+                labels: <?= json_encode(array_column($trends, 'year')) ?>,
+                datasets: [{
+                    label: 'Employment Rate',
+                    data: <?= json_encode(array_column($trends, 'rate')) ?>,
+                    borderColor: '#EF4444',
+                    backgroundColor: 'rgba(239,68,68,0.1)',
+                    tension: 0.1
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, max: 150 } }
+                scales: { y: { beginAtZero: true, max: 100 } }
             }
         });
     }

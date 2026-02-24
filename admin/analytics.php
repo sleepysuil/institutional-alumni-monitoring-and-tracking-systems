@@ -11,18 +11,14 @@ $yearly = $pdo->query("SELECT a.graduation_year,
     GROUP BY a.graduation_year ORDER BY a.graduation_year")->fetchAll();
 $programs = $pdo->query("SELECT program, COUNT(*) as count FROM alumni GROUP BY program")->fetchAll();
 
-// Prepare chart data
 $emp_labels = array_column($employment_status, 'status');
 $emp_data = array_column($employment_status, 'count');
-
 $ind_labels = array_column($industry_dist, 'industry');
 $ind_data = array_column($industry_dist, 'count');
-
 $year_labels = array_column($yearly, 'graduation_year');
 $year_data = array_map(function($y) { 
     return $y['total'] ? round(($y['employed']/$y['total'])*100,1) : 0; 
 }, $yearly);
-
 $prog_labels = array_column($programs, 'program');
 $prog_data = array_column($programs, 'count');
 ?>
@@ -78,9 +74,10 @@ $prog_data = array_column($programs, 'count');
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Employment Status Chart
-    if (document.getElementById('empChart')) {
-        new Chart(document.getElementById('empChart'), {
+    // Employment Status (Pie)
+    const empCtx = document.getElementById('empChart');
+    if (empCtx) {
+        new Chart(empCtx, {
             type: 'pie',
             data: {
                 labels: <?= json_encode($emp_labels) ?>,
@@ -89,13 +86,31 @@ document.addEventListener('DOMContentLoaded', function() {
                     backgroundColor: ['#2563EB', '#8B5CF6', '#EF4444', '#F59E0B', '#10B981']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    datalabels: {
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 3,
+                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value, context) => {
+                            let total = context.dataset.data.reduce((a,b) => a + b, 0);
+                            let percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                            return percentage;
+                        }
+                    }
+                }
+            }
         });
     }
 
-    // Industry Distribution
-    if (document.getElementById('indChart')) {
-        new Chart(document.getElementById('indChart'), {
+    // Industry Distribution (Bar) – no percentages needed
+    const indCtx = document.getElementById('indChart');
+    if (indCtx) {
+        new Chart(indCtx, {
             type: 'bar',
             data: {
                 labels: <?= json_encode($ind_labels) ?>,
@@ -105,13 +120,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     backgroundColor: '#8B5CF6'
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { datalabels: { display: false } }
+            }
         });
     }
 
-    // Employment Rate by Year
-    if (document.getElementById('yearChart')) {
-        new Chart(document.getElementById('yearChart'), {
+    // Employment Rate by Year (Line)
+    const yearCtx = document.getElementById('yearChart');
+    if (yearCtx) {
+        new Chart(yearCtx, {
             type: 'line',
             data: {
                 labels: <?= json_encode($year_labels) ?>,
@@ -122,17 +142,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     tension: 0.1
                 }]
             },
-            options: { 
-                responsive: true, 
+            options: {
+                responsive: true,
                 maintainAspectRatio: false,
-                scales: { y: { beginAtZero: true, max: 100 } }
+                scales: { y: { beginAtZero: true, max: 100 } },
+                plugins: { datalabels: { display: false } }
             }
         });
     }
 
-    // Alumni by Program
-    if (document.getElementById('progChart')) {
-        new Chart(document.getElementById('progChart'), {
+    // Alumni by Program (Doughnut)
+    const progCtx = document.getElementById('progChart');
+    if (progCtx) {
+        new Chart(progCtx, {
             type: 'doughnut',
             data: {
                 labels: <?= json_encode($prog_labels) ?>,
@@ -141,7 +163,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     backgroundColor: ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    datalabels: {
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 3,
+                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value, context) => {
+                            let total = context.dataset.data.reduce((a,b) => a + b, 0);
+                            let percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                            return percentage;
+                        }
+                    }
+                }
+            }
         });
     }
 });

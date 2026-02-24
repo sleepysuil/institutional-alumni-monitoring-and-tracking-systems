@@ -1,26 +1,25 @@
-/* ========== USAT Alumni System - UI/UX Enhanced ========== */
-/* Updated with palette: #388087, #6FB3B3, #BADFE7, #C2EDCE, #F6F6F2 */
+/*  #388087, #6FB3B3, #BADFE7, #C2EDCE, #F6F6F2 */
 
 :root {
-    --primary: #388087;       /* dark teal */
-    --primary-light: #6FB3B3; /* medium teal */
-    --primary-dark: #2a6b6b;  /* darker teal (derived) */
-    --accent: #6FB3B3;        /* medium teal (also used as accent) */
-    --accent-light: #BADFE7;  /* very light teal */
-    --accent-dark: #388087;   /* dark teal */
-    --success: #C2EDCE;       /* mint */
-    --warning: #BADFE7;       /* light teal (for warning) */
-    --danger: #388087;        /* dark teal (for danger) */
-    --info: #BADFE7;          /* light teal */
-    --dark: #1f4f4f;          /* dark teal for text */
-    --light: #F6F6F2;         /* off-white */
-    --gray: #88a8a8;          /* muted teal */
-    --border: #BADFE7;        /* light teal for borders */
-    --sidebar-bg: #388087;    /* dark teal sidebar */
-    --sidebar-text: #F6F6F2;  /* off-white text on sidebar */
-    --sidebar-hover: #6FB3B3; /* medium teal hover */
-    --card-bg: #FFFFFF;       /* white for cards (kept for contrast) */
-    --body-bg: #F6F6F2;       /* off-white page background */
+    --primary: #388087;       
+    --primary-light: #6FB3B3; 
+    --primary-dark: #2a6b6b;  
+    --accent: #6FB3B3;        
+    --accent-light: #BADFE7;  
+    --accent-dark: #388087;   
+    --success: #C2EDCE;       
+    --warning: #BADFE7;       
+    --danger: #388087;        
+    --info: #BADFE7;          
+    --dark: #1f4f4f;          
+    --light: #F6F6F2;         
+    --gray: #88a8a8;          
+    --border: #BADFE7;        
+    --sidebar-bg: #388087;   
+    --sidebar-text: #F6F6F2;  
+    --sidebar-hover: #6FB3B3; 
+    --card-bg: #FFFFFF;       
+    --body-bg: #F6F6F2;       
 }
 
 /* Global */
@@ -62,7 +61,7 @@ body {
 .sidebar-logo img {
     max-width: 140px;
     height: auto;
-    filter: brightness(0) invert(1);
+    filter: brightness(0) invert(1); 
     opacity: 0.9;
 }
 
@@ -329,7 +328,7 @@ body {
 .form-control:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(107, 179, 179, 0.2); /* #6FB3B3 with opacity */
+    box-shadow: 0 0 0 3px rgba(111, 179, 179, 0.2);
 }
 
 /* Badges */
@@ -380,13 +379,55 @@ body {
     text-decoration: underline;
 }
 
-/* Quick help items */
-.help-item {
+/* Quick help items (used in contact page) */
+.quick-help-item {
     padding: 0.75rem;
-    border-left: 3px solid var(--accent);
+    border-left: 3px solid var(--primary-light);
     background: var(--light);
     margin-bottom: 0.5rem;
     border-radius: 0 0.5rem 0.5rem 0;
+}
+
+/* Contact icon style */
+.contact-icon {
+    width: 40px;
+    color: var(--primary);
+}
+
+/* Team card styles (used in about and contact pages) */
+.team-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    border-radius: 1rem;
+    background: white;
+    overflow: hidden;
+}
+.team-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+}
+.team-img-wrapper {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 1rem;
+    position: relative;
+}
+.team-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 4px solid var(--primary-light);
+    transition: border-color 0.3s;
+}
+.team-card:hover .team-img {
+    border-color: var(--primary);
+}
+.team-card.adviser .team-img {
+    border-color: var(--primary);
+}
+.team-card.adviser:hover .team-img {
+    border-color: var(--primary-dark);
 }
 
 /* Tabs */
@@ -481,29 +522,24 @@ body {
     }
 }
 
-/* Auth pages specific background */
-.auth-bg {
-    background-image: url('../img/light-college-bg.png');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    position: relative;
+/* Input group styling (for login/register) */
+.input-group-text {
+    background: white;
+    border: 1px solid var(--border);
+    border-right: none;
+    color: var(--gray);
+    border-radius: 0.75rem 0 0 0.75rem;
 }
 
-.auth-bg::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 0;
+.input-group .form-control,
+.input-group .form-select {
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 0.75rem 0.75rem 0;
 }
 
-.auth-bg .auth-card {
-    position: relative;
-    z-index: 1;
-    background-color: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(5px);
+.input-group .form-control:focus,
+.input-group .form-select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(111, 179, 179, 0.2);
 }

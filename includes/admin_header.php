@@ -15,7 +15,7 @@ if (!isAdmin()) { redirect('../index.php'); }
 <body>
     <aside class="sidebar">
         <div class="sidebar-logo">
-            <img src="<?= SITE_URL ?>/assets/img/sagax-city-logo.png" alt="USAT">
+            <img src="<?= SITE_URL ?>/assets/img/usat-logo.jpg" alt="USAT">
         </div>
         <nav class="nav flex-column">
             <?php $current = basename($_SERVER['PHP_SELF']); ?>

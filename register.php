@@ -2,7 +2,7 @@
 require_once 'config/db.php';
 require_once 'includes/functions.php';
 
-// Fetch distinct programs from alumni table for dropdown
+// Fetch distinct programs
 $programs = $pdo->query("SELECT DISTINCT program FROM alumni ORDER BY program")->fetchAll(PDO::FETCH_COLUMN);
 if (empty($programs)) {
     $programs = [
@@ -15,11 +15,11 @@ if (empty($programs)) {
     ];
 }
 
-// Generate graduation year options
+// Graduation years
 $current_year = date('Y');
-$years = range($current_year, 1998);
+$years = range($current_year, 1970);
 
-// Country codes with names
+// Country codes
 $countries = [
     '+63' => 'Philippines',
     '+1'  => 'USA/Canada',
@@ -124,10 +124,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= SITE_URL ?>/assets/css/style.css">
 </head>
-<body class="auth-bg">
+<body class="auth-wrapper">
     <div class="auth-card" style="max-width: 550px;">
         <div class="text-center mb-4">
-            <img src="<?= SITE_URL ?>/assets/img/sagax-city-logo.png" alt="USAT" style="max-width: 120px;">
+            <img src="<?= SITE_URL ?>/assets/img/usat-logo.jpg" alt="USAT Logo" style="max-width: 120px;">
         </div>
         <h2 class="text-center">Create Account</h2>
         <p class="text-center text-muted mb-4">Join the USAT alumni community</p>
@@ -140,16 +140,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <?php endif; ?>
         
         <form method="post">
-            <!-- Full Name with icon -->
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-user"></i></span>
-                <input type="text" class="form-control" id="full_name" name="full_name" placeholder="Full Name" required>
+            <!-- Full Name -->
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-user"></i></span>
+                    <input type="text" class="form-control" id="full_name" name="full_name" placeholder="Full Name" required>
+                </div>
             </div>
             
-            <!-- Student ID with icon -->
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-id-card"></i></span>
-                <input type="text" class="form-control" id="student_id" name="student_id" placeholder="Student ID (e.g., USAT-2026-0001)" required>
+            <!-- Student ID -->
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-id-card"></i></span>
+                    <input type="text" class="form-control" id="student_id" name="student_id" placeholder="Student ID (e.g., USAT-2026-0001)" required>
+                </div>
             </div>
             
             <!-- Program Dropdown -->
@@ -172,13 +176,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 </select>
             </div>
             
-            <!-- Email with icon -->
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                <input type="email" class="form-control" id="email" name="email" placeholder="Email address" required>
+            <!-- Email -->
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                    <input type="email" class="form-control" id="email" name="email" placeholder="Email address" required>
+                </div>
             </div>
             
-            <!-- Phone with country code dropdown and number -->
+            <!-- Phone with Country Code -->
             <div class="mb-3">
                 <label class="form-label">Phone (optional)</label>
                 <div class="input-group">
@@ -192,19 +198,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <small class="text-muted">Enter local number without leading zero</small>
             </div>
             
-            <!-- Password with icon -->
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+            <!-- Password -->
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+                </div>
             </div>
             
-            <!-- Confirm Password with icon -->
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required>
+            <!-- Confirm Password -->
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                    <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required>
+                </div>
             </div>
             
-            <!-- Terms and Conditions -->
+            <!-- Terms -->
             <div class="mb-3 form-check">
                 <input type="checkbox" class="form-check-input" id="terms" name="terms" required>
                 <label class="form-check-label" for="terms">

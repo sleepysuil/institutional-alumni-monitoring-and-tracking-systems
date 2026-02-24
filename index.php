@@ -36,13 +36,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="<?= SITE_URL ?>/assets/css/style.css">
 </head>
-<body class="auth-bg">
+<body class="auth-wrapper">
     <div class="auth-card">
-        <!-- Logo -->
         <div class="text-center mb-4">
-            <img src="<?= SITE_URL ?>/assets/img/sagax-city-logo.png" alt="USAT" style="max-width: 150px;">
+            <img src="<?= SITE_URL ?>/assets/img/usat-logo.jpg" alt="USAT Logo" style="max-width: 150px;">
         </div>
-        <h2 class="text-center">Welcome Back</h2>
+        <h2 class="text-center">Welcome Back Alumni</h2>
         <p class="text-center text-muted mb-4">Please enter your credentials to login.</p>
         
         <?php if (isset($error)): ?>
@@ -50,13 +49,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <?php endif; ?>
         
         <form method="post">
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                <input type="email" class="form-control" id="email" name="email" placeholder="Email address" required>
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+                    <input type="email" class="form-control" id="email" name="email" placeholder="Email address" required>
+                </div>
             </div>
-            <div class="mb-3 input-group">
-                <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+            <div class="mb-3">
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+                </div>
             </div>
             <button type="submit" class="btn btn-primary w-100 py-2">Login</button>
         </form>

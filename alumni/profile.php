@@ -11,6 +11,11 @@ $employment = $pdo->prepare("SELECT * FROM employment WHERE alumni_id = ?");
 $employment->execute([$alumni_id]);
 $employment = $employment->fetch();
 
+// Fetch employment history
+$history = $pdo->prepare("SELECT * FROM employment_history WHERE alumni_id = ? ORDER BY start_date DESC");
+$history->execute([$alumni_id]);
+$history = $history->fetchAll();
+
 // Handle personal info update (including photo)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_personal'])) {
     $first = cleanInput($_POST['first_name']);
@@ -19,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_personal'])) {
     $phone = cleanInput($_POST['phone']);
     
     // Handle file upload
-    $profile_pic = $alumni['profile_pic']; // keep old by default
+    $profile_pic = $alumni['profile_pic'];
     if (isset($_FILES['profile_pic']) && $_FILES['profile_pic']['error'] == 0) {
         $allowed = ['jpg', 'jpeg', 'png', 'gif'];
         $filename = $_FILES['profile_pic']['name'];
@@ -30,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_personal'])) {
             $new_filename = uniqid() . '_' . $alumni_id . '.' . $ext;
             $destination = $upload_dir . $new_filename;
             if (move_uploaded_file($_FILES['profile_pic']['tmp_name'], $destination)) {
-                $profile_pic = 'uploads/profiles/' . $new_filename; // relative path for DB
-                // Delete old file if exists
+                $profile_pic = 'uploads/profiles/' . $new_filename;
+                // Delete old file
                 if ($alumni['profile_pic'] && file_exists('../' . $alumni['profile_pic'])) {
                     unlink('../' . $alumni['profile_pic']);
                 }
@@ -81,14 +86,14 @@ $error = $error ?? '';
 <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>
 
 <div class="row g-4">
-    <!-- Left column: Profile Summary & Photo -->
+    <!-- Left column: Profile Summary -->
     <div class="col-md-4">
         <div class="card text-center">
             <div class="card-body">
                 <?php if ($alumni['profile_pic'] && file_exists('../' . $alumni['profile_pic'])): ?>
-                    <img src="<?= SITE_URL ?>/<?= $alumni['profile_pic'] ?>" alt="Profile" class="rounded-circle mb-3" style="width: 150px; height: 150px; object-fit: cover;">
+                    <img src="<?= SITE_URL ?>/<?= $alumni['profile_pic'] ?>" alt="Profile" class="rounded-circle mb-3" style="width: 150px; height: 150px; object-fit: cover; border: 3px solid var(--primary);">
                 <?php else: ?>
-                    <i class="fas fa-user-circle fa-5x mb-3" style="color: var(--primary);"></i>
+                    <i class="fas fa-user-circle fa-6x mb-3" style="color: var(--primary);"></i>
                 <?php endif; ?>
                 <h5><?= htmlspecialchars($alumni['first_name'] . ' ' . $alumni['last_name']) ?></h5>
                 <p class="text-muted"><?= $alumni['student_id'] ?></p>
@@ -101,9 +106,9 @@ $error = $error ?? '';
         </div>
     </div>
     
-    <!-- Right column: Forms -->
+    <!-- Right column: Forms and History -->
     <div class="col-md-8">
-        <!-- Personal Information Form (with photo upload) -->
+        <!-- Personal Info Form -->
         <div class="card mb-4">
             <div class="card-header">Personal Information</div>
             <div class="card-body">
@@ -129,16 +134,16 @@ $error = $error ?? '';
                     <div class="mb-3">
                         <label class="form-label">Profile Picture</label>
                         <input type="file" name="profile_pic" class="form-control" accept="image/*">
-                        <small class="text-muted">Leave empty to keep current picture. Max 2MB. JPG, PNG, GIF only.</small>
+                        <small class="text-muted">Leave empty to keep current. Max 2MB. JPG, PNG, GIF.</small>
                     </div>
                     <button type="submit" name="update_personal" class="btn btn-primary">Save Changes</button>
                 </form>
             </div>
         </div>
 
-        <!-- Employment Information Form -->
-        <div class="card">
-            <div class="card-header">Employment Information</div>
+        <!-- Employment Form -->
+        <div class="card mb-4">
+            <div class="card-header">Current Employment</div>
             <div class="card-body">
                 <form method="post">
                     <div class="mb-3">
@@ -178,6 +183,32 @@ $error = $error ?? '';
                 </form>
             </div>
         </div>
+
+        <!-- Employment History -->
+        <?php if (count($history) > 0): ?>
+        <div class="card">
+            <div class="card-header">Employment History</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr><th>Company</th><th>Position</th><th>Start</th><th>End</th></tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($history as $h): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($h['company']) ?></td>
+                                <td><?= htmlspecialchars($h['position']) ?></td>
+                                <td><?= $h['start_date'] ?></td>
+                                <td><?= $h['end_date'] ?? 'Present' ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 
