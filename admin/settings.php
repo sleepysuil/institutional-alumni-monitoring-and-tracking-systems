@@ -1,7 +1,6 @@
 <?php
 require_once '../includes/admin_header.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Save settings (simulated)
     $_SESSION['message'] = "Settings saved (simulated).";
     redirect('settings.php');
 }

@@ -1,7 +1,6 @@
 <?php
 require_once '../includes/admin_header.php';
 
-// Get employment rate per year
 $yearly = $pdo->query("
     SELECT a.graduation_year,
            COUNT(CASE WHEN e.status IN ('Employed','Self-Employed') THEN 1 END) as employed,
@@ -25,7 +24,7 @@ foreach ($yearly as $y) {
         'year' => $y['graduation_year'],
         'rate' => $rate,
         'direction' => $direction,
-        'prediction' => $rate // simplistic: same as current
+        'prediction' => $rate
     ];
     $prev_rate = $rate;
 }
@@ -78,8 +77,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 datasets: [{
                     label: 'Employment Rate',
                     data: <?= json_encode(array_column($trends, 'rate')) ?>,
-                    borderColor: '#EF4444',
-                    backgroundColor: 'rgba(239,68,68,0.1)',
+                    borderColor: '#388087',
+                    backgroundColor: 'rgba(56,128,135,0.1)',
                     tension: 0.1
                 }]
             },

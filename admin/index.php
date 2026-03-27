@@ -21,13 +21,12 @@ $chart_data = [];
 foreach ($categories as $cat) {
     $chart_data[$cat] = $status_counts[$cat] ?? 0;
 }
-$total_employed = $employed ?: 1; // avoid division by zero
+$total_employed = $employed ?: 1;
 ?>
 <div class="page-header">
     <h1>Dashboard</h1>
 </div>
 
-<!-- Stats Cards -->
 <div class="row g-4">
     <div class="col-md-3">
         <div class="stat-card primary">
@@ -59,7 +58,6 @@ $total_employed = $employed ?: 1; // avoid division by zero
     </div>
 </div>
 
-<!-- Recent Registrations and Pie Chart -->
 <div class="row mt-4 g-4">
     <div class="col-md-6">
         <div class="card">
@@ -89,10 +87,10 @@ $total_employed = $employed ?: 1; // avoid division by zero
                     <canvas id="employmentChart"></canvas>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mt-3">
-                    <span class="badge" style="background:#2563EB;">Employed (<?= $chart_data['Employed'] ?>)</span>
-                    <span class="badge" style="background:#EF4444;">Self-Employed (<?= $chart_data['Self-Employed'] ?>)</span>
-                    <span class="badge" style="background:#F59E0B;">Unemployed (<?= $chart_data['Unemployed'] ?>)</span>
-                    <span class="badge" style="background:#10B981;">Higher Ed (<?= $chart_data['Pursuing Higher Education'] ?>)</span>
+                    <span class="badge" style="background:#388087;">Employed (<?= $chart_data['Employed'] ?>)</span>
+                    <span class="badge" style="background:#6FB3B3;">Self-Employed (<?= $chart_data['Self-Employed'] ?>)</span>
+                    <span class="badge" style="background:#BADFE7; color:#1f4f4f;">Unemployed (<?= $chart_data['Unemployed'] ?>)</span>
+                    <span class="badge" style="background:#C2EDCE; color:#1f4f4f;">Higher Ed (<?= $chart_data['Pursuing Higher Education'] ?>)</span>
                 </div>
             </div>
         </div>
@@ -103,36 +101,42 @@ $total_employed = $employed ?: 1; // avoid division by zero
 document.addEventListener('DOMContentLoaded', function() {
     const ctx = document.getElementById('employmentChart');
     if (ctx) {
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Employed', 'Self-Employed', 'Unemployed', 'Higher Education'],
-                datasets: [{
-                    data: [<?= $chart_data['Employed'] ?>, <?= $chart_data['Self-Employed'] ?>, <?= $chart_data['Unemployed'] ?>, <?= $chart_data['Pursuing Higher Education'] ?>],
-                    backgroundColor: ['#2563EB', '#EF4444', '#F59E0B', '#10B981'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { position: 'bottom', labels: { boxWidth: 12 } },
-                    datalabels: {
-                        color: '#fff',
-                        backgroundColor: 'rgba(0,0,0,0.6)',
-                        borderRadius: 3,
-                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
-                        font: { weight: 'bold', size: 11 },
-                        formatter: (value, context) => {
-                            let total = context.dataset.data.reduce((a,b) => a + b, 0);
-                            let percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
-                            return percentage;
+        try {
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Employed', 'Self-Employed', 'Unemployed', 'Higher Education'],
+                    datasets: [{
+                        data: [<?= $chart_data['Employed'] ?>, <?= $chart_data['Self-Employed'] ?>, <?= $chart_data['Unemployed'] ?>, <?= $chart_data['Pursuing Higher Education'] ?>],
+                        backgroundColor: ['#388087', '#6FB3B3', '#BADFE7', '#C2EDCE'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12 } },
+                        datalabels: {
+                            color: '#fff',
+                            backgroundColor: 'rgba(0,0,0,0.6)',
+                            borderRadius: 3,
+                            padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value, context) => {
+                                let total = context.dataset.data.reduce((a,b) => a + b, 0);
+                                let percentage = total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                                return percentage;
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        } catch (e) {
+            ctx.insertAdjacentHTML('afterend', '<div class="alert alert-warning">Chart could not be loaded. Please check that Chart.js is included.</div>');
+        }
+    } else {
+        console.error('Chart canvas not found');
     }
 });
 </script>

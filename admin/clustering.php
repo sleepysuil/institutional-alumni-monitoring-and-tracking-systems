@@ -2,7 +2,6 @@
 require_once '../includes/admin_header.php';
 
 // Get alumni with graduation year and salary (numeric from salary_range if possible)
-// For simplicity, we'll extract approximate numeric salary from salary_range (e.g., "₱25,000 - ₱35,000" -> average 30000)
 $alumni_data = $pdo->query("
     SELECT a.graduation_year, e.salary_range
     FROM alumni a
@@ -10,7 +9,6 @@ $alumni_data = $pdo->query("
     WHERE e.salary_range IS NOT NULL AND e.salary_range != ''
 ")->fetchAll();
 
-// Convert salary_range to numeric average
 $points = [];
 foreach ($alumni_data as $row) {
     $salary = 0;
@@ -22,12 +20,6 @@ foreach ($alumni_data as $row) {
     }
 }
 
-// If no data, use empty array
-if (empty($points)) {
-    $points = [];
-}
-
-// Simple clustering by year ranges (we'll create 3 clusters manually based on data)
 $clusters = [];
 $years = array_column($points, 'x');
 if (!empty($years)) {
@@ -52,7 +44,6 @@ if (!empty($years)) {
     $clusters = [$cluster1, $cluster2, $cluster3];
 }
 
-// Prepare summary stats per cluster
 $summary = [];
 foreach ($clusters as $c) {
     if (empty($c['points'])) continue;
@@ -61,12 +52,10 @@ foreach ($clusters as $c) {
     $summary[] = [
         'name' => $c['name'],
         'year' => round(array_sum($years) / count($years)),
-        'rate' => 100, // We don't have employment rate per cluster easily
         'salary' => round(array_sum($salaries) / count($salaries))
     ];
 }
 
-// If no data, show message
 $has_data = !empty($points);
 ?>
 <div class="page-header">
@@ -83,7 +72,7 @@ $has_data = !empty($points);
         <div class="card">
             <div class="card-header">Cluster Visualization</div>
             <div class="card-body">
-                <div class="chart-container">
+                <div class="chart-container" style="min-height: 300px;">
                     <canvas id="clusterChart"></canvas>
                 </div>
             </div>

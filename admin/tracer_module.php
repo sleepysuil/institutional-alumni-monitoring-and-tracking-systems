@@ -1,5 +1,6 @@
 <?php
 require_once '../includes/admin_header.php';
+
 $total_alumni = $pdo->query("SELECT COUNT(*) FROM alumni")->fetchColumn();
 $employed = $pdo->query("SELECT COUNT(*) FROM employment WHERE status IN ('Employed','Self-Employed')")->fetchColumn();
 $employment_rate = $total_alumni ? round(($employed/$total_alumni)*100,1) : 0;
@@ -7,6 +8,13 @@ $unemployed = $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Unemplo
 $job_relevance = $pdo->query("SELECT COUNT(*) FROM employment WHERE relevance='Highly Relevant'")->fetchColumn();
 $relevance_rate = $employed ? round(($job_relevance/$employed)*100,1) : 0;
 $years = $pdo->query("SELECT graduation_year, COUNT(*) as cnt FROM alumni GROUP BY graduation_year ORDER BY graduation_year DESC")->fetchAll();
+
+$statuses = [
+    'Employed' => $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Employed'")->fetchColumn(),
+    'Self-Employed' => $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Self-Employed'")->fetchColumn(),
+    'Unemployed' => $unemployed,
+    'Pursuing Higher Education' => $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Pursuing Higher Education'")->fetchColumn(),
+];
 ?>
 <div class="page-header">
     <h1>Tracer Module</h1>
@@ -54,15 +62,10 @@ $years = $pdo->query("SELECT graduation_year, COUNT(*) as cnt FROM alumni GROUP 
         <div class="card">
             <div class="card-header">Employment Status Breakdown</div>
             <div class="card-body">
-                <?php
-                $statuses = [
-                    'Employed' => $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Employed'")->fetchColumn(),
-                    'Self-Employed' => $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Self-Employed'")->fetchColumn(),
-                    'Unemployed' => $unemployed,
-                    'Pursuing Higher Education' => $pdo->query("SELECT COUNT(*) FROM employment WHERE status='Pursuing Higher Education'")->fetchColumn(),
-                ];
-                ?>
-                <div class="list-group">
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div class="list-group mt-3">
                     <?php foreach ($statuses as $label => $count): ?>
                     <div class="list-group-item d-flex justify-content-between align-items-center">
                         <?= $label ?>
@@ -95,6 +98,39 @@ $years = $pdo->query("SELECT graduation_year, COUNT(*) as cnt FROM alumni GROUP 
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('statusChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: <?= json_encode(array_keys($statuses)) ?>,
+                datasets: [{
+                    data: <?= json_encode(array_values($statuses)) ?>,
+                    backgroundColor: ['#388087', '#6FB3B3', '#BADFE7', '#C2EDCE']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    datalabels: {
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 3,
+                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value, context) => {
+                            let total = context.dataset.data.reduce((a,b) => a + b, 0);
+                            return total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+
 function sendTracerSurvey() {
     if(confirm('Send tracer survey to all alumni?')) {
         alert('Survey notifications sent!');

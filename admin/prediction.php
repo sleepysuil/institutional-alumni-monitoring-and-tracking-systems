@@ -150,4 +150,30 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('predictionChart');
+    if (ctx) {
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Employment Probability'],
+                datasets: [{
+                    label: 'Prediction',
+                    data: [<?= $prediction ?>],
+                    backgroundColor: '#388087'
+                }]
+            },
+            options: { 
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { max: 100 } },
+                plugins: { datalabels: { display: false } }
+            }
+        });
+    }
+});
+</script>
+
 <?php include '../includes/footer.php'; ?>

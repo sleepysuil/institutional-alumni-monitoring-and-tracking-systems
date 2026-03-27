@@ -10,12 +10,7 @@ $program_industries = $pdo->query("
     GROUP BY a.program, e.industry
 ")->fetchAll();
 
-// For each program, calculate match percentage for top industries
 $skills = [];
-$programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FETCH_COLUMN);
-$industries = $pdo->query("SELECT DISTINCT industry FROM employment WHERE industry IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
-
-// Dummy required skills per industry (could be stored in a table)
 $required_skills = [
     'Information Technology' => ['Cloud Computing', 'AI/ML', 'Cybersecurity', 'DevOps', 'Mobile Development'],
     'Accounting' => ['Data Analytics', 'ERP Systems', 'Financial Modeling', 'Compliance'],

@@ -59,10 +59,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: <?= json_encode(array_column($relevance_counts, 'relevance')) ?>,
                 datasets: [{
                     data: <?= json_encode(array_column($relevance_counts, 'cnt')) ?>,
-                    backgroundColor: ['#10B981', '#F59E0B', '#EF4444']
+                    backgroundColor: ['#388087', '#6FB3B3', '#BADFE7']
                 }]
             },
-            options: { responsive: true, maintainAspectRatio: false }
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: {
+                    datalabels: {
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 3,
+                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value, context) => {
+                            let total = context.dataset.data.reduce((a,b) => a + b, 0);
+                            return total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '0%';
+                        }
+                    }
+                }
+            }
         });
     }
 });

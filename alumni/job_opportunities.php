@@ -6,6 +6,9 @@ $jobs = $pdo->query("SELECT * FROM job_postings WHERE status='active' ORDER BY p
     <h1>Job Opportunities</h1>
 </div>
 
+<?php if (empty($jobs)): ?>
+    <div class="alert alert-info">No job opportunities available at the moment.</div>
+<?php else: ?>
 <div class="row g-4">
     <?php foreach ($jobs as $job): ?>
     <div class="col-md-6">
@@ -21,5 +24,6 @@ $jobs = $pdo->query("SELECT * FROM job_postings WHERE status='active' ORDER BY p
     </div>
     <?php endforeach; ?>
 </div>
+<?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

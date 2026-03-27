@@ -1,14 +1,21 @@
 <?php
 require_once '../includes/admin_header.php';
+
 $search = $_GET['search'] ?? '';
 $program = $_GET['program'] ?? '';
 $status = $_GET['status'] ?? '';
+$page = (int)($_GET['page'] ?? 1);
+$limit = 10;
+$offset = ($page - 1) * $limit;
 
+// Base query
 $sql = "SELECT a.*, e.status, e.company, e.position, e.industry, e.relevance 
         FROM alumni a 
         LEFT JOIN employment e ON a.id = e.alumni_id 
         WHERE 1";
 $params = [];
+
+// Apply filters
 if ($search) {
     $sql .= " AND (a.first_name LIKE ? OR a.last_name LIKE ? OR a.student_id LIKE ? OR a.email LIKE ?)";
     $params = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%"]);
@@ -21,10 +28,41 @@ if ($status && $status != 'All Status') {
     $sql .= " AND e.status = ?";
     $params[] = $status;
 }
+
+// Count total records (without LIMIT/OFFSET)
+$count_sql = "SELECT COUNT(*) FROM alumni a LEFT JOIN employment e ON a.id = e.alumni_id WHERE 1" . substr($sql, strpos($sql, 'AND') ?: strlen($sql));
+// Alternative: we can rebuild count query from conditions only, but for simplicity we use the same conditions.
+// Let's construct count query by extracting the WHERE clause from $sql.
+$where_clause = substr($sql, strpos($sql, 'WHERE') + 5); // get everything after WHERE
+$count_sql = "SELECT COUNT(*) FROM alumni a LEFT JOIN employment e ON a.id = e.alumni_id WHERE " . $where_clause;
+
+$stmt = $pdo->prepare($count_sql);
+foreach ($params as $i => $val) {
+    $stmt->bindValue($i+1, $val);
+}
+$stmt->execute();
+$total_records = $stmt->fetchColumn();
+$total_pages = ceil($total_records / $limit);
+
+// Add LIMIT and OFFSET to main query
+$sql .= " ORDER BY a.last_name LIMIT ? OFFSET ?";
+
+// Prepare the main statement
 $stmt = $pdo->prepare($sql);
-$stmt->execute($params);
+
+// Bind the filter parameters (all are strings)
+foreach ($params as $i => $val) {
+    $stmt->bindValue($i+1, $val, PDO::PARAM_STR);
+}
+
+// Bind LIMIT and OFFSET as integers
+$stmt->bindValue(count($params)+1, (int)$limit, PDO::PARAM_INT);
+$stmt->bindValue(count($params)+2, (int)$offset, PDO::PARAM_INT);
+
+$stmt->execute();
 $alumni = $stmt->fetchAll();
 
+// Get distinct programs for filter dropdown
 $programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <div class="page-header">
@@ -93,5 +131,17 @@ $programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FE
     </div>
     <?php endforeach; ?>
 </div>
+
+<?php if ($total_pages > 1): ?>
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+        <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['page' => $i])) ?>"><?= $i ?></a>
+        </li>
+        <?php endfor; ?>
+    </ul>
+</nav>
+<?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

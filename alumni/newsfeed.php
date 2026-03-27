@@ -1,16 +1,11 @@
 <?php
 require_once '../includes/alumni_header.php';
 
-// Determine filter
-$filter = $_GET['filter'] ?? 'all'; // all, jobs, announcements
+$filter = $_GET['filter'] ?? 'all';
 
-// Fetch announcements
 $announcements = $pdo->query("SELECT 'announcement' as type, id, title, content as description, posted_date, NULL as company, posted_by FROM announcements ORDER BY posted_date DESC")->fetchAll();
-
-// Fetch job postings
 $jobs = $pdo->query("SELECT 'job' as type, id, title, description, posted_date, company, NULL as posted_by FROM job_postings WHERE status='active' ORDER BY posted_date DESC")->fetchAll();
 
-// Merge and filter
 $feed = [];
 if ($filter == 'all') {
     $feed = array_merge($announcements, $jobs);
@@ -20,20 +15,14 @@ if ($filter == 'all') {
     $feed = $announcements;
 }
 
-// Sort by posted_date descending
-usort($feed, function($a, $b) {
-    return strtotime($b['posted_date']) - strtotime($a['posted_date']);
-});
-
-// Pagination (optional, simple limit)
+usort($feed, fn($a, $b) => strtotime($b['posted_date']) - strtotime($a['posted_date']));
 $feed = array_slice($feed, 0, 20);
 ?>
 <div class="page-header">
     <h1>Newsfeed</h1>
 </div>
 
-<!-- Filter Tabs -->
-<ul class="nav nav-tabs mb-4">
+<ul class="nav nav-tabs flex-wrap">
     <li class="nav-item">
         <a class="nav-link <?= $filter == 'all' ? 'active' : '' ?>" href="?filter=all">All Updates</a>
     </li>
@@ -46,7 +35,7 @@ $feed = array_slice($feed, 0, 20);
 </ul>
 
 <div class="row">
-    <div class="col-md-8">
+    <div class="col-lg-8">
         <?php if (empty($feed)): ?>
             <div class="alert alert-info">No updates found.</div>
         <?php endif; ?>
@@ -54,8 +43,8 @@ $feed = array_slice($feed, 0, 20);
         <?php foreach ($feed as $item): ?>
         <div class="card mb-3 newsfeed-item <?= $item['type'] ?>">
             <div class="card-body">
-                <div class="d-flex">
-                    <div class="flex-shrink-0">
+                <div class="d-flex flex-column flex-sm-row">
+                    <div class="flex-shrink-0 mb-2 mb-sm-0">
                         <?php if ($item['type'] == 'job'): ?>
                             <i class="fas fa-briefcase fa-2x text-primary me-3"></i>
                         <?php else: ?>
@@ -86,8 +75,7 @@ $feed = array_slice($feed, 0, 20);
         <?php endforeach; ?>
     </div>
 
-    <!-- Sidebar (optional) -->
-    <div class="col-md-4">
+    <div class="col-lg-4">
         <div class="card">
             <div class="card-header">Quick Links</div>
             <ul class="list-group list-group-flush">
