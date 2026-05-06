@@ -1,0 +1,4 @@
+[30-Mar-2026 10:14:28 Europe/Berlin] Sending SMS to: +09850871125, Message: Test message from USAT Alumni System at 2026-03-30 10:14:28
+[30-Mar-2026 10:14:29 Europe/Berlin] Infobip API Request: {"messages":[{"from":"USATAlumni","destinations":[{"to":"+09850871125"}],"text":"Test message from USAT Alumni System at 2026-03-30 10:14:28"}]}
+[30-Mar-2026 10:14:29 Europe/Berlin] Infobip API Response: {"messages":[{"messageId":"4748584457147952379710","status":{"description":"Message sent to next instance","groupId":1,"groupName":"PENDING","id":26,"name":"PENDING_ACCEPTED"},"to":"+09850871125"}]}
+[30-Mar-2026 10:14:29 Europe/Berlin] Infobip HTTP Code: 200

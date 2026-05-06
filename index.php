@@ -12,14 +12,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user['password'])) {
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['role'] = $user['role'];
-        $_SESSION['alumni_id'] = $user['alumni_id'];
-
-        if ($user['role'] == 'admin') {
-            redirect('admin/index.php');
+        // Check if alumni is approved
+        if ($user['role'] == 'alumni') {
+            $check = $pdo->prepare("SELECT is_approved, approval_status FROM alumni WHERE id = ?");
+            $check->execute([$user['alumni_id']]);
+            $alumni = $check->fetch();
+            
+            if (!$alumni['is_approved']) {
+                $error = "Your account is pending admin approval. Please wait for confirmation.";
+            } else {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['role'] = $user['role'];
+                $_SESSION['alumni_id'] = $user['alumni_id'];
+                
+                if ($user['role'] == 'admin') {
+                    redirect('admin/index.php');
+                } else {
+                    redirect('alumni/dashboard.php');
+                }
+            }
         } else {
-            redirect('alumni/dashboard.php');
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['role'] = $user['role'];
+            $_SESSION['alumni_id'] = $user['alumni_id'];
+            
+            if ($user['role'] == 'admin') {
+                redirect('admin/index.php');
+            } else {
+                redirect('alumni/dashboard.php');
+            }
         }
     } else {
         $error = "Invalid email or password";
@@ -61,7 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary w-100 py-2">Login</button>
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary px-5 py-2">Login</button>
+            </div>
         </form>
         
         <p class="mt-3 text-center">

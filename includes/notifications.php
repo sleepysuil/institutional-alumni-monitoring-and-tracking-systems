@@ -1,13 +1,17 @@
 <?php
-function sendEmail($to, $subject, $body) {
-    // Placeholder – integrate PHPMailer here
-    error_log("Email to $to: $subject");
-    return true;
+require_once __DIR__ . '/semaphore.php';
+
+function sendSMS($to, $message) {
+    $result = sendSMSViaSemaphore($to, $message);
+    return $result['success'] ?? false;
 }
 
-function sendSMS($number, $message) {
-    // Placeholder – integrate SMS API here
-    error_log("SMS to $number: $message");
+function sendSMSMessage($to, $message) {
+    return sendSMS($to, $message);
+}
+
+function sendEmail($to, $subject, $body) {
+    error_log("Email would be sent to: $to, Subject: $subject");
     return true;
 }
 ?>

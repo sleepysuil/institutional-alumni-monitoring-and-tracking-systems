@@ -1,14 +1,13 @@
 <?php
-define('SITE_URL', 'http://localhost/alumni-system');
+define('SITE_URL', 'http://localhost/Institutional-Alumni-Monitoring-and-Tracer-System');
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'alumni_system');
-// Email settings (dummy)
-define('SMTP_HOST', 'smtp.gmail.com');
-define('SMTP_PORT', 587);
-define('SMTP_USER', 'your_email@gmail.com');
-define('SMTP_PASS', 'your_app_password');
-define('SMTP_FROM', 'your_email@gmail.com');
-define('SMTP_FROM_NAME', 'USAT Alumni System');
+
+define('PASSWORD_MIN_LENGTH', 8);
+
+// Semaphore SMS Configuration - WORKING!
+define('SEMAPHORE_API_KEY', 'ac38c73fc57798ea5417129ec5172bfc');
+define('SEMAPHORE_SENDER_NAME', 'SEMAPHORE');
 ?>

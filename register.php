@@ -1,6 +1,11 @@
 <?php
 require_once 'config/db.php';
 require_once 'includes/functions.php';
+require_once 'includes/notifications.php';
+
+// Get approval setting
+$require_approval = $pdo->query("SELECT setting_value FROM system_settings WHERE setting_key = 'require_admin_approval'")->fetchColumn();
+$require_approval = $require_approval === false ? 1 : $require_approval;
 
 // Fetch distinct programs
 $programs = $pdo->query("SELECT DISTINCT program FROM alumni ORDER BY program")->fetchAll(PDO::FETCH_COLUMN);
@@ -15,65 +20,59 @@ if (empty($programs)) {
     ];
 }
 
-// Graduated years (1970 to current year)
+// Graduated years
 $current_year = date('Y');
 $years = range($current_year, 1970);
 
-// Country codes with sample numbers
+// Country codes
 $countries = [
-    '+63' => ['name' => 'Philippines', 'sample' => '9123456789'],
-    '+1'  => ['name' => 'USA/Canada', 'sample' => '2125551234'],
-    '+44' => ['name' => 'United Kingdom', 'sample' => '7912345678'],
-    '+62' => ['name' => 'Indonesia', 'sample' => '812345678'],
-    '+60' => ['name' => 'Malaysia', 'sample' => '123456789'],
-    '+65' => ['name' => 'Singapore', 'sample' => '91234567'],
-    '+81' => ['name' => 'Japan', 'sample' => '9012345678'],
-    '+82' => ['name' => 'South Korea', 'sample' => '1012345678'],
-    '+61' => ['name' => 'Australia', 'sample' => '412345678'],
-    '+64' => ['name' => 'New Zealand', 'sample' => '211234567'],
-    '+86' => ['name' => 'China', 'sample' => '13123456789'],
-    '+91' => ['name' => 'India', 'sample' => '9876543210'],
-    '+33' => ['name' => 'France', 'sample' => '612345678'],
-    '+49' => ['name' => 'Germany', 'sample' => '1512345678'],
-    '+39' => ['name' => 'Italy', 'sample' => '3123456789'],
-    '+34' => ['name' => 'Spain', 'sample' => '612345678'],
-    '+31' => ['name' => 'Netherlands', 'sample' => '612345678'],
-    '+46' => ['name' => 'Sweden', 'sample' => '701234567'],
-    '+47' => ['name' => 'Norway', 'sample' => '41234567'],
-    '+45' => ['name' => 'Denmark', 'sample' => '21234567'],
-    '+358' => ['name' => 'Finland', 'sample' => '401234567'],
-    '+41' => ['name' => 'Switzerland', 'sample' => '791234567'],
-    '+43' => ['name' => 'Austria', 'sample' => '664123456'],
-    '+32' => ['name' => 'Belgium', 'sample' => '470123456'],
-    '+48' => ['name' => 'Poland', 'sample' => '601234567'],
-    '+420' => ['name' => 'Czech Republic', 'sample' => '601234567'],
-    '+36' => ['name' => 'Hungary', 'sample' => '20123456'],
-    '+30' => ['name' => 'Greece', 'sample' => '6912345678'],
-    '+90' => ['name' => 'Turkey', 'sample' => '5312345678'],
-    '+966' => ['name' => 'Saudi Arabia', 'sample' => '501234567'],
-    '+971' => ['name' => 'UAE', 'sample' => '501234567'],
-    '+974' => ['name' => 'Qatar', 'sample' => '33123456'],
-    '+20' => ['name' => 'Egypt', 'sample' => '1012345678'],
-    '+27' => ['name' => 'South Africa', 'sample' => '712345678'],
-    '+234' => ['name' => 'Nigeria', 'sample' => '7012345678'],
-    '+254' => ['name' => 'Kenya', 'sample' => '712345678'],
-    '+52' => ['name' => 'Mexico', 'sample' => '5512345678'],
-    '+55' => ['name' => 'Brazil', 'sample' => '11912345678'],
-    '+54' => ['name' => 'Argentina', 'sample' => '1123456789'],
-    '+56' => ['name' => 'Chile', 'sample' => '912345678'],
-    '+57' => ['name' => 'Colombia', 'sample' => '3001234567'],
-    '+58' => ['name' => 'Venezuela', 'sample' => '4121234567'],
-    '+51' => ['name' => 'Peru', 'sample' => '987654321'],
-    '+593' => ['name' => 'Ecuador', 'sample' => '987654321'],
-    '+598' => ['name' => 'Uruguay', 'sample' => '98765432'],
-    '+595' => ['name' => 'Paraguay', 'sample' => '981234567'],
+    '+63' => 'Philippines',
+    '+1'  => 'USA/Canada',
+    '+44' => 'United Kingdom',
+    '+62' => 'Indonesia',
+    '+60' => 'Malaysia',
+    '+65' => 'Singapore',
+    '+81' => 'Japan',
+    '+82' => 'South Korea',
+    '+61' => 'Australia',
+    '+64' => 'New Zealand',
+    '+86' => 'China',
+    '+91' => 'India',
+    '+33' => 'France',
+    '+49' => 'Germany',
+    '+39' => 'Italy',
+    '+34' => 'Spain',
+    '+31' => 'Netherlands',
+    '+46' => 'Sweden',
+    '+47' => 'Norway',
+    '+45' => 'Denmark',
+    '+358' => 'Finland',
+    '+41' => 'Switzerland',
+    '+43' => 'Austria',
+    '+32' => 'Belgium',
+    '+48' => 'Poland',
+    '+420' => 'Czech Republic',
+    '+36' => 'Hungary',
+    '+30' => 'Greece',
+    '+90' => 'Turkey',
+    '+966' => 'Saudi Arabia',
+    '+971' => 'UAE',
+    '+974' => 'Qatar',
+    '+20' => 'Egypt',
+    '+27' => 'South Africa',
+    '+234' => 'Nigeria',
+    '+254' => 'Kenya',
+    '+52' => 'Mexico',
+    '+55' => 'Brazil',
+    '+54' => 'Argentina',
+    '+56' => 'Chile',
+    '+57' => 'Colombia',
+    '+58' => 'Venezuela',
+    '+51' => 'Peru',
+    '+593' => 'Ecuador',
+    '+598' => 'Uruguay',
+    '+595' => 'Paraguay',
 ];
-
-// Prepare samples array for JavaScript
-$samples = [];
-foreach ($countries as $code => $data) {
-    $samples[$code] = $data['sample'];
-}
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (!isset($_POST['terms'])) {
@@ -96,22 +95,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $password = $_POST['password'];
         $confirm = $_POST['confirm_password'];
         
-        if ($password !== $confirm) {
+        // Check if student ID already exists
+        $check_stmt = $pdo->prepare("SELECT id FROM alumni WHERE student_id = ?");
+        $check_stmt->execute([$student_id]);
+        if ($check_stmt->fetch()) {
+            $error = "Student ID already exists. Please check your ID or contact the alumni office.";
+        } 
+        // Check if email already exists
+        elseif ($pdo->prepare("SELECT id FROM users WHERE email = ?")->execute([$email]) && $pdo->prepare("SELECT id FROM users WHERE email = ?")->fetch()) {
+            $error = "Email already registered. Please use a different email address or login.";
+        }
+        elseif ($password !== $confirm) {
             $error = "Passwords do not match.";
         } else {
             $hashed = password_hash($password, PASSWORD_DEFAULT);
             
             try {
                 $pdo->beginTransaction();
-                $stmt = $pdo->prepare("INSERT INTO alumni (student_id, first_name, last_name, program, graduation_year, email, phone) VALUES (?,?,?,?,?,?,?)");
-                $stmt->execute([$student_id, $first_name, $last_name, $program, $grad_year, $email, $phone]);
+                
+                // Set approval status
+                $is_approved = ($require_approval == 0) ? 1 : 0;
+                $approval_status = ($require_approval == 0) ? 'approved' : 'pending';
+                
+                $stmt = $pdo->prepare("INSERT INTO alumni (student_id, first_name, last_name, program, graduation_year, email, phone, is_approved, approval_status) VALUES (?,?,?,?,?,?,?, ?, ?)");
+                $stmt->execute([$student_id, $first_name, $last_name, $program, $grad_year, $email, $phone, $is_approved, $approval_status]);
                 $alumni_id = $pdo->lastInsertId();
                 
                 $stmt2 = $pdo->prepare("INSERT INTO users (email, password, role, alumni_id) VALUES (?,?, 'alumni', ?)");
                 $stmt2->execute([$email, $hashed, $alumni_id]);
                 
                 $pdo->commit();
-                $success = "Registration successful! You can now login.";
+                
+                // Send welcome email
+                if (function_exists('sendWelcomeEmail')) {
+                    sendWelcomeEmail($alumni_id);
+                }
+                
+                if ($require_approval) {
+                    $success = "Registration successful! Your account is pending admin approval. You will receive an email once approved.";
+                } else {
+                    $success = "Registration successful! You can now login.";
+                }
             } catch (Exception $e) {
                 $pdo->rollBack();
                 $error = "Registration failed: " . $e->getMessage();
@@ -195,11 +219,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <label class="form-label">Phone (optional)</label>
                 <div class="input-group">
                     <select class="form-select" name="country_code" id="country_code" style="max-width: 180px;">
-                        <?php foreach ($countries as $code => $data): ?>
-                            <option value="<?= $code ?>" <?= $code == '+63' ? 'selected' : '' ?>><?= $code ?> (<?= $data['name'] ?>)</option>
+                        <?php foreach ($countries as $code => $name): ?>
+                            <option value="<?= $code ?>" <?= $code == '+63' ? 'selected' : '' ?>><?= $code ?> (<?= $name ?>)</option>
                         <?php endforeach; ?>
                     </select>
-                    <input type="text" class="form-control" id="phone" name="phone" placeholder="9123456789" pattern="\d{7,15}" title="Please enter a valid phone number with 7 to 15 digits" maxlength="15">
+                    <input type="text" class="form-control" id="phone" name="phone" placeholder="9123456789" pattern="\d{7,15}" title="Please enter a valid phone number with 7 to 15 digits">
                 </div>
                 <small class="text-muted">Enter local number without leading zero</small>
             </div>
@@ -210,6 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     <span class="input-group-text"><i class="fas fa-lock"></i></span>
                     <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
                 </div>
+                <small class="text-muted">Password must be at least 8 characters</small>
             </div>
             
             <!-- Confirm Password -->
@@ -243,22 +268,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <a href="terms.php">Terms</a>
         </div>
     </div>
-
+    
     <script>
-        // Map country sample phone numbers (generated with json_encode)
-        const countrySamples = <?= json_encode($samples, JSON_PRETTY_PRINT) ?>;
-
-        function updatePhonePlaceholder() {
-            const select = document.getElementById('country_code');
-            const phoneInput = document.getElementById('phone');
-            const selectedCode = select.value;
-            const sample = countrySamples[selectedCode] || "enter your phone number";
-            phoneInput.placeholder = sample;
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            updatePhonePlaceholder();
-            document.getElementById('country_code').addEventListener('change', updatePhonePlaceholder);
+        // Password validation
+        document.getElementById('password').addEventListener('input', function() {
+            const password = this.value;
+            if (password.length < 8) {
+                this.setCustomValidity('Password must be at least 8 characters');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+        
+        document.getElementById('confirm_password').addEventListener('input', function() {
+            const password = document.getElementById('password').value;
+            if (this.value !== password) {
+                this.setCustomValidity('Passwords do not match');
+            } else {
+                this.setCustomValidity('');
+            }
         });
     </script>
 </body>

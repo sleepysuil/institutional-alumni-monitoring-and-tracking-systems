@@ -3,66 +3,68 @@ require_once '../includes/admin_header.php';
 
 $search = $_GET['search'] ?? '';
 $program = $_GET['program'] ?? '';
-$status = $_GET['status'] ?? '';
+$status_filter = $_GET['status'] ?? '';
 $page = (int)($_GET['page'] ?? 1);
 $limit = 10;
 $offset = ($page - 1) * $limit;
 
-// Base query
-$sql = "SELECT a.*, e.status, e.company, e.position, e.industry, e.relevance 
-        FROM alumni a 
-        LEFT JOIN employment e ON a.id = e.alumni_id 
-        WHERE 1";
+// Build WHERE conditions for alumni table (no status filter for now)
+$where_conditions = [];
 $params = [];
 
-// Apply filters
 if ($search) {
-    $sql .= " AND (a.first_name LIKE ? OR a.last_name LIKE ? OR a.student_id LIKE ? OR a.email LIKE ?)";
-    $params = array_merge($params, ["%$search%", "%$search%", "%$search%", "%$search%"]);
+    $where_conditions[] = "(a.first_name LIKE ? OR a.last_name LIKE ? OR a.student_id LIKE ? OR a.email LIKE ?)";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
 }
 if ($program && $program != 'All Programs') {
-    $sql .= " AND a.program = ?";
+    $where_conditions[] = "a.program = ?";
     $params[] = $program;
 }
-if ($status && $status != 'All Status') {
-    $sql .= " AND e.status = ?";
-    $params[] = $status;
+
+$where_sql = '';
+if (!empty($where_conditions)) {
+    $where_sql = 'WHERE ' . implode(' AND ', $where_conditions);
 }
 
-// Count total records (without LIMIT/OFFSET)
-$count_sql = "SELECT COUNT(*) FROM alumni a LEFT JOIN employment e ON a.id = e.alumni_id WHERE 1" . substr($sql, strpos($sql, 'AND') ?: strlen($sql));
-// Alternative: we can rebuild count query from conditions only, but for simplicity we use the same conditions.
-// Let's construct count query by extracting the WHERE clause from $sql.
-$where_clause = substr($sql, strpos($sql, 'WHERE') + 5); // get everything after WHERE
-$count_sql = "SELECT COUNT(*) FROM alumni a LEFT JOIN employment e ON a.id = e.alumni_id WHERE " . $where_clause;
-
+// Count query
+$count_sql = "SELECT COUNT(*) FROM alumni a $where_sql";
 $stmt = $pdo->prepare($count_sql);
-foreach ($params as $i => $val) {
-    $stmt->bindValue($i+1, $val);
-}
-$stmt->execute();
+$stmt->execute($params);
 $total_records = $stmt->fetchColumn();
 $total_pages = ceil($total_records / $limit);
 
-// Add LIMIT and OFFSET to main query
-$sql .= " ORDER BY a.last_name LIMIT ? OFFSET ?";
+// Main query
+$sql = "SELECT a.*,
+               (SELECT is_employed FROM tracer_responses WHERE alumni_id = a.id ORDER BY response_date DESC LIMIT 1) as is_employed,
+               (SELECT survey_data FROM tracer_responses WHERE alumni_id = a.id ORDER BY response_date DESC LIMIT 1) as survey_data,
+               CASE 
+                   WHEN (SELECT is_employed FROM tracer_responses WHERE alumni_id = a.id ORDER BY response_date DESC LIMIT 1) = 1 THEN 'Employed'
+                   WHEN (SELECT is_employed FROM tracer_responses WHERE alumni_id = a.id ORDER BY response_date DESC LIMIT 1) = 0 THEN 'Unemployed'
+                   WHEN (SELECT is_employed FROM tracer_responses WHERE alumni_id = a.id ORDER BY response_date DESC LIMIT 1) = 2 THEN 'Self-Employed'
+                   ELSE 'No Survey'
+               END as employment_status
+        FROM alumni a
+        $where_sql
+        ORDER BY a.last_name
+        LIMIT ? OFFSET ?";
 
-// Prepare the main statement
 $stmt = $pdo->prepare($sql);
 
-// Bind the filter parameters (all are strings)
-foreach ($params as $i => $val) {
-    $stmt->bindValue($i+1, $val, PDO::PARAM_STR);
+// Bind filter parameters (all strings)
+$param_index = 1;
+foreach ($params as $val) {
+    $stmt->bindValue($param_index++, $val, PDO::PARAM_STR);
 }
-
 // Bind LIMIT and OFFSET as integers
-$stmt->bindValue(count($params)+1, (int)$limit, PDO::PARAM_INT);
-$stmt->bindValue(count($params)+2, (int)$offset, PDO::PARAM_INT);
+$stmt->bindValue($param_index++, (int)$limit, PDO::PARAM_INT);
+$stmt->bindValue($param_index++, (int)$offset, PDO::PARAM_INT);
 
 $stmt->execute();
 $alumni = $stmt->fetchAll();
 
-// Get distinct programs for filter dropdown
 $programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <div class="page-header">
@@ -72,7 +74,7 @@ $programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FE
 <div class="card mb-4">
     <div class="card-body">
         <form method="get" class="row g-3">
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <input type="text" name="search" class="form-control" placeholder="Search by name, ID, or email..." value="<?= htmlspecialchars($search) ?>">
             </div>
             <div class="col-md-3">
@@ -86,13 +88,13 @@ $programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FE
             <div class="col-md-3">
                 <select name="status" class="form-select">
                     <option value="">All Status</option>
-                    <option value="Employed" <?= $status == 'Employed' ? 'selected' : '' ?>>Employed</option>
-                    <option value="Self-Employed" <?= $status == 'Self-Employed' ? 'selected' : '' ?>>Self-Employed</option>
-                    <option value="Unemployed" <?= $status == 'Unemployed' ? 'selected' : '' ?>>Unemployed</option>
-                    <option value="Pursuing Higher Education" <?= $status == 'Pursuing Higher Education' ? 'selected' : '' ?>>Pursuing Higher Education</option>
+                    <option value="Employed" <?= $status_filter == 'Employed' ? 'selected' : '' ?>>Employed</option>
+                    <option value="Unemployed" <?= $status_filter == 'Unemployed' ? 'selected' : '' ?>>Unemployed</option>
+                    <option value="Self-Employed" <?= $status_filter == 'Self-Employed' ? 'selected' : '' ?>>Self-Employed</option>
+                    <option value="No Survey" <?= $status_filter == 'No Survey' ? 'selected' : '' ?>>No Survey</option>
                 </select>
             </div>
-            <div class="col-md-1">
+            <div class="col-md-2">
                 <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i></button>
             </div>
         </form>
@@ -117,14 +119,11 @@ $programs = $pdo->query("SELECT DISTINCT program FROM alumni")->fetchAll(PDO::FE
                         <p class="text-muted small mb-2"><?= $a['student_id'] ?></p>
                         <p class="mb-2"><i class="fas fa-envelope me-2"></i><?= $a['email'] ?><br><i class="fas fa-phone me-2"></i><?= $a['phone'] ?></p>
                         <p class="mb-2"><strong><?= $a['program'] ?></strong> • Class of <?= $a['graduation_year'] ?></p>
-                        <?php if (!empty($a['company'])): ?>
-                        <div class="mt-2 pt-2 border-top">
-                            <p class="mb-1"><strong><?= $a['position'] ?></strong> at <?= $a['company'] ?></p>
-                            <p class="small mb-2"><?= $a['industry'] ?> • <span class="badge bg-secondary"><?= $a['relevance'] ?></span></p>
-                        </div>
-                        <?php endif; ?>
                     </div>
-                    <span class="badge <?= strtolower(str_replace(' ', '-', $a['status'] ?? 'unemployed')) ?>"><?= $a['status'] ?? 'No status' ?></span>
+                    <span class="badge 
+                        <?= $a['employment_status'] == 'Employed' ? 'bg-success' : ($a['employment_status'] == 'Unemployed' ? 'bg-danger' : ($a['employment_status'] == 'Self-Employed' ? 'bg-info' : 'bg-secondary')) ?>">
+                        <?= $a['employment_status'] ?>
+                    </span>
                 </div>
             </div>
         </div>

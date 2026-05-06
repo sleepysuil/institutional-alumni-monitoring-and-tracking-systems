@@ -27,6 +27,7 @@ if (!isAdmin()) { redirect('../index.php'); }
             <a class="nav-link <?= $current == 'data_mining.php' ? 'active' : '' ?>" href="data_mining.php"><i class="fas fa-database"></i> Data Mining</a>
             <a class="nav-link <?= $current == 'reports.php' ? 'active' : '' ?>" href="reports.php"><i class="fas fa-file-alt"></i> Reports</a>
             <a class="nav-link <?= $current == 'announcements.php' ? 'active' : '' ?>" href="announcements.php"><i class="fas fa-bullhorn"></i> Announcements</a>
+            <a class="nav-link <?= $current == 'send_messages.php' ? 'active' : '' ?>" href="send_messages.php"><i class="fas fa-comment-dots"></i> Messages</a>
             <a class="nav-link <?= $current == 'applications.php' ? 'active' : '' ?>" href="applications.php"><i class="fas fa-file-signature"></i> Applications</a>
             <a class="nav-link <?= $current == 'settings.php' ? 'active' : '' ?>" href="settings.php"><i class="fas fa-cog"></i> Settings</a>
             <a class="nav-link" href="../logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>

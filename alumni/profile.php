@@ -19,7 +19,10 @@ $history = $history->fetchAll();
 // Handle personal info update (including photo)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_personal'])) {
     $first = cleanInput($_POST['first_name']);
+    $middle = cleanInput($_POST['middle_name']);
     $last = cleanInput($_POST['last_name']);
+    $age = (int)$_POST['age'];
+    $gender = $_POST['gender'];
     $email = cleanInput($_POST['email']);
     $phone = cleanInput($_POST['phone']);
     
@@ -47,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_personal'])) {
     }
     
     if (!isset($error)) {
-        $stmt = $pdo->prepare("UPDATE alumni SET first_name=?, last_name=?, email=?, phone=?, profile_pic=? WHERE id=?");
-        $stmt->execute([$first, $last, $email, $phone, $profile_pic, $alumni_id]);
+        $stmt = $pdo->prepare("UPDATE alumni SET first_name=?, middle_name=?, last_name=?, age=?, gender=?, email=?, phone=?, profile_pic=? WHERE id=?");
+        $stmt->execute([$first, $middle, $last, $age, $gender, $email, $phone, $profile_pic, $alumni_id]);
         $_SESSION['message'] = "Profile updated.";
         redirect('profile.php');
     }
@@ -95,11 +98,13 @@ $error = $error ?? '';
                 <?php else: ?>
                     <i class="fas fa-user-circle fa-6x mb-3" style="color: var(--primary);"></i>
                 <?php endif; ?>
-                <h5><?= htmlspecialchars($alumni['first_name'] . ' ' . $alumni['last_name']) ?></h5>
+                <h5><?= htmlspecialchars($alumni['first_name'] . ' ' . ($alumni['middle_name'] ? $alumni['middle_name'] . ' ' : '') . $alumni['last_name']) ?></h5>
                 <p class="text-muted"><?= $alumni['student_id'] ?></p>
                 <hr>
                 <p><strong>Program:</strong> <?= htmlspecialchars($alumni['program']) ?></p>
                 <p><strong>Graduation:</strong> <?= $alumni['graduation_year'] ?></p>
+                <p><strong>Age:</strong> <?= $alumni['age'] ?? 'N/A' ?></p>
+                <p><strong>Gender:</strong> <?= $alumni['gender'] ?? 'N/A' ?></p>
                 <p><strong>Email:</strong> <?= $alumni['email'] ?></p>
                 <p><strong>Phone:</strong> <?= $alumni['phone'] ?></p>
             </div>
@@ -108,24 +113,44 @@ $error = $error ?? '';
     
     <!-- Right column: Forms and History -->
     <div class="col-md-8">
-        <!-- Personal Info Form -->
+        <!-- Personal Info Form (with new fields) -->
         <div class="card mb-4">
             <div class="card-header">Personal Information</div>
             <div class="card-body">
                 <form method="post" enctype="multipart/form-data">
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">First Name</label>
                             <input type="text" name="first_name" class="form-control" value="<?= htmlspecialchars($alumni['first_name']) ?>" required>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Middle Name</label>
+                            <input type="text" name="middle_name" class="form-control" value="<?= htmlspecialchars($alumni['middle_name']) ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">Last Name</label>
                             <input type="text" name="last_name" class="form-control" value="<?= htmlspecialchars($alumni['last_name']) ?>" required>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($alumni['email']) ?>" required>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Age</label>
+                            <input type="number" name="age" class="form-control" value="<?= $alumni['age'] ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Gender</label>
+                            <select name="gender" class="form-select">
+                                <option value="">Select</option>
+                                <option value="Male" <?= ($alumni['gender']??'')=='Male'?'selected':'' ?>>Male</option>
+                                <option value="Female" <?= ($alumni['gender']??'')=='Female'?'selected':'' ?>>Female</option>
+                                <option value="Other" <?= ($alumni['gender']??'')=='Other'?'selected':'' ?>>Other</option>
+                                <option value="Prefer not to say" <?= ($alumni['gender']??'')=='Prefer not to say'?'selected':'' ?>>Prefer not to say</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($alumni['email']) ?>" required>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Phone</label>
@@ -141,7 +166,7 @@ $error = $error ?? '';
             </div>
         </div>
 
-        <!-- Employment Form -->
+        <!-- Employment Form (unchanged) -->
         <div class="card mb-4">
             <div class="card-header">Current Employment</div>
             <div class="card-body">
@@ -192,7 +217,7 @@ $error = $error ?? '';
                 <div class="table-responsive">
                     <table class="table table-sm">
                         <thead>
-                            <tr><th>Company</th><th>Position</th><th>Start</th><th>End</th></tr>
+                            <tr><th>Company</th><th>Position</th><th>Start</th><th>End</th> </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($history as $h): ?>
