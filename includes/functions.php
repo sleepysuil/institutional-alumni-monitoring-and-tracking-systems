@@ -2,6 +2,17 @@
 function cleanInput($data) {
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
+function statusBadgeClass($status) {
+    $map = [
+        'Employed' => 'bg-success',
+        'Self-Employed' => 'bg-info',
+        'Unemployed' => 'bg-danger',
+        'Pursuing Higher Education' => 'bg-warning',
+        'No Data' => 'bg-secondary',
+        'No Survey' => 'bg-secondary',
+    ];
+    return $map[$status] ?? 'bg-secondary';
+}
 function isLoggedIn() { return isset($_SESSION['user_id']); }
 function isAdmin() { return ($_SESSION['role'] ?? '') === 'admin'; }
 function isAlumni() { return ($_SESSION['role'] ?? '') === 'alumni'; }
@@ -16,3 +27,4 @@ function timeAgo($datetime) {
     return date('M j, Y', $time);
 }
 ?>
+ 

@@ -540,3 +540,25 @@ body {
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(111, 179, 179, 0.2);
 }
+/* Pagination — themed to match the rest of the UI */
+.pagination-wrapper { flex-wrap: wrap; }
+.pagination .page-link {
+    color: var(--primary);
+    border: 1px solid var(--border);
+    margin: 0 2px;
+    border-radius: 0.5rem !important;
+}
+.pagination .page-item.active .page-link {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+.pagination .page-item.disabled .page-link {
+    color: var(--gray);
+    background: var(--light);
+    cursor: not-allowed;
+}
+
+/* Empty state */
+.empty-state { padding: 3rem 1rem; text-align: center; color: var(--gray); }
+.empty-state i { opacity: .35; }

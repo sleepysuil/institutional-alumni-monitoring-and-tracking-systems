@@ -11,12 +11,12 @@ $require_approval = $require_approval === false ? 1 : $require_approval;
 $programs = $pdo->query("SELECT DISTINCT program FROM alumni ORDER BY program")->fetchAll(PDO::FETCH_COLUMN);
 if (empty($programs)) {
     $programs = [
+        'BS Automotive Engineering',
+        'BS Computer and Electronics',
+        'BS Electronics Engineering',
+        'BS Hotel and Restaurant Services',
         'BS Information Systems',
-        'BS Computer Science',
-        'BS Business Administration',
-        'BS Accountancy',
-        'BS Hospitality Management',
-        'BS Education'
+        'BS Tourism Management',
     ];
 }
 

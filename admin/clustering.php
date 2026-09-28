@@ -60,7 +60,7 @@ $has_data = !empty($points);
 ?>
 <div class="page-header">
     <h1>Clustering Analysis</h1>
-    <p class="text-muted">Alumni Segmentation (K-Means Clustering based on graduated year and salary)</p>
+    <p class="text-muted">Alumni Segmentation (K-Means Clustering based on graduation year and salary)</p>
 </div>
 
 <?php if (!$has_data): ?>
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { title: { display: true, text: 'Graduated Year' } },
+                    x: { title: { display: true, text: 'Graduation Year' } },
                     y: { 
                         title: { display: true, text: 'Salary (₱)' },
                         ticks: { callback: value => '₱' + value.toLocaleString() }
