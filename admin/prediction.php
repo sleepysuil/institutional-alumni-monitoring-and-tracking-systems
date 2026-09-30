@@ -1,73 +1,68 @@
 <?php
 require_once '../includes/admin_header.php';
+require_once '../includes/mining_helpers.php';
 
-$programs = $pdo->query("SELECT DISTINCT program FROM alumni ORDER BY program")->fetchAll(PDO::FETCH_COLUMN);
+$profiles = getAlumniProfiles($pdo);
+
+$programs = array_values(array_unique(array_column($profiles, 'program')));
+sort($programs);
+
 $selected_program = $_GET['program'] ?? ($programs[0] ?? '');
-$grad_year = $_GET['grad_year'] ?? date('Y');
+if (!in_array($selected_program, $programs, true)) $selected_program = $programs[0] ?? '';
+$grad_year = (int)($_GET['grad_year'] ?? date('Y'));   // cast: also stops XSS via the URL
+if ($grad_year < 1970 || $grad_year > 2100) $grad_year = (int)date('Y');
 
 $avg_time = 'N/A';
-$prediction = 0;
+$prediction = null;   // percent
+$ci = [0, 0];
+$sample = 0;
+$note = '';
 $industries = [];
 
 if ($selected_program) {
-    // Approximate time to first job using employment start_date and graduation year
-    $stmt = $pdo->prepare("
-        SELECT e.start_date, a.graduation_year
-        FROM alumni a
-        JOIN employment e ON a.id = e.alumni_id
-        WHERE a.program = ? AND e.start_date IS NOT NULL
-    ");
-    $stmt->execute([$selected_program]);
-    $rows = $stmt->fetchAll();
-    
-    $months_diff = [];
-    foreach ($rows as $row) {
-        // Assume graduation on June 1 of graduation_year
-        $grad_date = new DateTime($row['graduation_year'] . '-06-01');
-        $start_date = new DateTime($row['start_date']);
-        $interval = $grad_date->diff($start_date);
-        $months = $interval->y * 12 + $interval->m;
-        if ($months >= 0) {
-            $months_diff[] = $months;
+    $rows = array_values(array_filter($profiles, fn($p) => $p['program'] === $selected_program));
+
+    // ---- Average time to first employment (months) ----
+    $months = [];
+    foreach ($rows as $p) {
+        if (!$p['working']) continue;
+        $m = null;
+        if ($p['start_date'] && $p['year']) {
+            try {
+                $grad  = new DateTime($p['year'] . '-06-01');   // assume graduation June 1
+                $start = new DateTime($p['start_date']);
+                if ($start >= $grad) {
+                    $d = $grad->diff($start);
+                    $m = $d->y * 12 + $d->m;
+                }
+            } catch (Exception $e) {}
         }
+        if ($m === null) $m = timeLabelToMonths($p['time_to_first_job']);   // fall back to survey answer
+        if ($m !== null && $m <= 120) $months[] = $m;
     }
-    
-    if (!empty($months_diff)) {
-        $avg_months = array_sum($months_diff) / count($months_diff);
-        $avg_time = round($avg_months) . ' months';
-        
-        // Prediction: employment rate for recent graduates (last 3 years)
-        $recent = $pdo->prepare("
-            SELECT COUNT(DISTINCT a.id) as employed
-            FROM alumni a
-            JOIN employment e ON a.id = e.alumni_id
-            WHERE a.program = ? AND a.graduation_year >= ? AND e.status IN ('Employed','Self-Employed')
-        ");
-        $recent->execute([$selected_program, $grad_year - 3]);
-        $employed_recent = $recent->fetchColumn();
-        
-        $total_recent = $pdo->prepare("
-            SELECT COUNT(*) FROM alumni WHERE program = ? AND graduation_year >= ?
-        ");
-        $total_recent->execute([$selected_program, $grad_year - 3]);
-        $total = $total_recent->fetchColumn();
-        
-        $prediction = $total ? round(($employed_recent / $total) * 100, 1) : 0;
+    if ($months) $avg_time = round(array_sum($months) / count($months), 1) . ' months';
+
+    // ---- Employment probability from recent cohorts ----
+    $cohort = array_filter($rows, fn($p) => $p['status'] !== null && $p['year'] >= $grad_year - 3 && $p['year'] <= $grad_year);
+    if (!$cohort) {
+        $cohort = array_filter($rows, fn($p) => $p['status'] !== null);
+        if ($cohort) $note = 'No recent-cohort responses, so all graduates of this program were used.';
     }
-    
-    // Top industries for this program
-    $ind_stmt = $pdo->prepare("
-        SELECT e.industry, COUNT(*) as cnt
-        FROM alumni a
-        JOIN employment e ON a.id = e.alumni_id
-        WHERE a.program = ? AND e.industry IS NOT NULL
-        GROUP BY e.industry
-        ORDER BY cnt DESC
-        LIMIT 3
-    ");
-    $ind_stmt->execute([$selected_program]);
-    $industries = $ind_stmt->fetchAll(PDO::FETCH_COLUMN);
+    $sample = count($cohort);
+    if ($sample > 0) {
+        $employed = count(array_filter($cohort, fn($p) => $p['working']));
+        $prediction = round($employed / $sample * 100, 1);
+        $ci = array_map(fn($v) => round($v * 100, 1), wilsonInterval($employed, $sample));
+        if ($sample < 10) $note = trim($note . ' Small sample (' . $sample . ' responses): treat the result as indicative.');
+    }
+
+    // ---- Top industries ----
+    $counts = [];
+    foreach ($rows as $p) if ($p['working'] && $p['industry']) $counts[$p['industry']] = ($counts[$p['industry']] ?? 0) + 1;
+    arsort($counts);
+    $industries = array_slice(array_keys($counts), 0, 3);
 }
+$pred_display = $prediction ?? 0;
 ?>
 <div class="page-header">
     <h1>Employment Outcome Prediction</h1>
@@ -80,7 +75,7 @@ if ($selected_program) {
                 <label class="form-label">Program</label>
                 <select name="program" class="form-select">
                     <?php foreach ($programs as $p): ?>
-                    <option value="<?= $p ?>" <?= $selected_program==$p?'selected':'' ?>><?= $p ?></option>
+                    <option value="<?= htmlspecialchars($p) ?>" <?= $selected_program == $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -102,11 +97,17 @@ if ($selected_program) {
             <div class="card-body">
                 <p><strong>Program:</strong> <?= htmlspecialchars($selected_program) ?></p>
                 <p><strong>Graduation Year:</strong> <?= $grad_year ?></p>
-                <p><strong>Average Time to Employment:</strong> <?= $avg_time ?></p>
-                <p><strong>Recommended Industries:</strong> <?= !empty($industries) ? implode(', ', $industries) : 'No data' ?></p>
-                <div class="progress mt-3" style="height: 25px;">
-                    <div class="progress-bar" style="width: <?= $prediction ?>%; background: linear-gradient(90deg, #1E3A8A, #8B5CF6);"><?= $prediction ?>% Probability</div>
-                </div>
+                <p><strong>Average Time to Employment:</strong> <?= htmlspecialchars($avg_time) ?></p>
+                <p><strong>Recommended Industries:</strong> <?= $industries ? htmlspecialchars(implode(', ', $industries)) : 'No data' ?></p>
+                <?php if ($prediction === null): ?>
+                    <div class="alert alert-info mb-0">No survey or employment responses for this program yet.</div>
+                <?php else: ?>
+                    <div class="progress mt-3" style="height: 25px;">
+                        <div class="progress-bar" style="width: <?= $pred_display ?>%; background: linear-gradient(90deg, #388087, #6FB3B3);"><?= $pred_display ?>% Probability</div>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">95% interval: <?= $ci[0] ?>% – <?= $ci[1] ?>% (based on <?= $sample ?> responses)</p>
+                    <?php if ($note): ?><p class="small text-warning mt-1 mb-0"><?= htmlspecialchars($note) ?></p><?php endif; ?>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -124,55 +125,23 @@ if ($selected_program) {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const ctx = document.getElementById('predictionChart');
-    if (ctx) {
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Employment Probability'],
-                datasets: [{
-                    label: 'Prediction',
-                    data: [<?= $prediction ?>],
-                    backgroundColor: '#8B5CF6'
-                }]
-            },
-            options: { 
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { x: { max: 100 } },
-                plugins: {
-                    datalabels: { display: false } // not needed for bar
-                }
-            }
-        });
-    }
-});
-</script>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const ctx = document.getElementById('predictionChart');
-    if (ctx) {
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Employment Probability'],
-                datasets: [{
-                    label: 'Prediction',
-                    data: [<?= $prediction ?>],
-                    backgroundColor: '#388087'
-                }]
-            },
-            options: { 
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: { x: { max: 100 } },
-                plugins: { datalabels: { display: false } }
-            }
-        });
-    }
+    new Chart(document.getElementById('predictionChart'), {
+        type: 'bar',
+        data: {
+            labels: ['Lower bound', 'Estimate', 'Upper bound'],
+            datasets: [{
+                data: [<?= $ci[0] ?>, <?= $pred_display ?>, <?= $ci[1] ?>],
+                backgroundColor: ['#BADFE7', '#388087', '#BADFE7']
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { x: { min: 0, max: 100, ticks: { callback: v => v + '%' } } },
+            plugins: { legend: { display: false }, datalabels: { display: false } }
+        }
+    });
 });
 </script>
 

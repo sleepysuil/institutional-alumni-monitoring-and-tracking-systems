@@ -1,63 +1,37 @@
-/* ========== USAT Alumni System - Main JS ========== */
-document.addEventListener('DOMContentLoaded', function () {
-
-    /* ---------- Mobile Sidebar Toggle ---------- */
-    const toggleBtn = document.getElementById('mobileToggle');
-    const sidebar = document.getElementById('mainSidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-
-    if (toggleBtn && sidebar && overlay) {
-        toggleBtn.addEventListener('click', function () {
-            sidebar.classList.toggle('show');
-            overlay.classList.toggle('active');
-            // Change icon
-            const icon = toggleBtn.querySelector('i');
-            if (sidebar.classList.contains('show')) {
-                icon.classList.remove('fa-bars');
-                icon.classList.add('fa-times');
-            } else {
-                icon.classList.remove('fa-times');
-                icon.classList.add('fa-bars');
-            }
-        });
-
-        // Close sidebar when overlay clicked
-        overlay.addEventListener('click', function () {
-            sidebar.classList.remove('show');
-            overlay.classList.remove('active');
-            const icon = toggleBtn.querySelector('i');
-            icon.classList.remove('fa-times');
-            icon.classList.add('fa-bars');
-        });
-
-        // Close sidebar when a nav link is clicked (on mobile)
-        sidebar.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', function () {
-                if (window.innerWidth < 768) {
-                    sidebar.classList.remove('show');
-                    overlay.classList.remove('active');
-                    const icon = toggleBtn.querySelector('i');
-                    icon.classList.remove('fa-times');
-                    icon.classList.add('fa-bars');
-                }
-            });
-        });
-    }
-
-    /* ---------- Auto-hide alerts after 5 seconds ---------- */
-    setTimeout(function () {
-        document.querySelectorAll('.alert').forEach(function (alert) {
+// Auto-hide alerts after 5 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        document.querySelectorAll('.alert').forEach(function(alert) {
             alert.style.transition = 'opacity 0.5s';
             alert.style.opacity = '0';
             setTimeout(() => alert.remove(), 500);
         });
     }, 5000);
 
-    /* ---------- Responsive table: add scroll hint on mobile ---------- */
-    if (window.innerWidth < 768) {
-        document.querySelectorAll('.table-responsive').forEach(function (el) {
-            el.style.overflowX = 'auto';
-            el.style.webkitOverflowScrolling = 'touch';
-        });
+    // ===== Mobile sidebar toggle =====
+    const sidebar  = document.querySelector('.sidebar');
+    const toggle   = document.getElementById('sidebarToggle');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (!sidebar || !toggle || !backdrop) return;
+
+    const icon = toggle.querySelector('i');
+
+    function setOpen(open) {
+        sidebar.classList.toggle('show', open);
+        backdrop.classList.toggle('show', open);
+        document.body.classList.toggle('sidebar-open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (icon) {
+            icon.classList.toggle('fa-bars', !open);
+            icon.classList.toggle('fa-times', open);
+        }
     }
+
+    toggle.addEventListener('click', () => setOpen(!sidebar.classList.contains('show')));
+    backdrop.addEventListener('click', () => setOpen(false));
+    sidebar.querySelectorAll('.nav-link').forEach(link =>
+        link.addEventListener('click', () => setOpen(false))
+    );
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
+    window.addEventListener('resize', () => { if (window.innerWidth > 991) setOpen(false); });
 });

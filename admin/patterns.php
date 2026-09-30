@@ -1,242 +1,147 @@
 <?php
 require_once '../includes/admin_header.php';
+require_once '../includes/mining_helpers.php';
 
 $patterns = [];
 $source = 'none';
 
-// First, try to get from employment_history
-$history_exists = $pdo->query("SELECT COUNT(*) FROM employment_history")->fetchColumn();
+// ---- 1. Career transitions from employment_history ----
+$history = $pdo->query("
+    SELECT alumni_id, position, start_date
+    FROM employment_history
+    WHERE position IS NOT NULL AND position != ''
+    ORDER BY alumni_id, start_date
+")->fetchAll();
 
-if ($history_exists > 0) {
-    // Get all employment history ordered by alumni and start date
-    $history = $pdo->query("
-        SELECT alumni_id, position, start_date 
-        FROM employment_history 
-        ORDER BY alumni_id, start_date
-    ")->fetchAll();
-
-    // Group by alumni
+if ($history) {
     $careers = [];
     foreach ($history as $h) {
-        $careers[$h['alumni_id']][] = ['pos' => $h['position'], 'date' => $h['start_date']];
+        $careers[$h['alumni_id']][] = ['pos' => cleanText($h['position']), 'date' => $h['start_date']];
     }
 
-    // Find common transitions
     $transitions = [];
     foreach ($careers as $steps) {
         for ($i = 0; $i < count($steps) - 1; $i++) {
             $from = $steps[$i]['pos'];
-            $to = $steps[$i+1]['pos'];
-            if ($from && $to) {
-                $key = $from . '|' . $to;
-                if (!isset($transitions[$key])) {
-                    $transitions[$key] = ['from' => $from, 'to' => $to, 'count' => 0, 'timeframes' => []];
-                }
-                $transitions[$key]['count']++;
-                // Calculate timeframe in months
-                $start = new DateTime($steps[$i]['date']);
-                $end = new DateTime($steps[$i+1]['date']);
-                $months = $start->diff($end)->m + $start->diff($end)->y * 12;
-                $transitions[$key]['timeframes'][] = $months;
+            $to   = $steps[$i + 1]['pos'];
+            if (!$from || !$to || strcasecmp($from, $to) === 0) continue;
+
+            $key = strtolower($from . '|' . $to);
+            if (!isset($transitions[$key])) {
+                $transitions[$key] = ['from' => $from, 'to' => $to, 'count' => 0, 'months' => []];
             }
+            $transitions[$key]['count']++;
+            try {
+                $d = (new DateTime($steps[$i]['date']))->diff(new DateTime($steps[$i + 1]['date']));
+                $transitions[$key]['months'][] = $d->y * 12 + $d->m;
+            } catch (Exception $e) {}
         }
     }
-
     foreach ($transitions as $t) {
-        $avg_months = $t['count'] ? round(array_sum($t['timeframes']) / $t['count']) : 0;
         $patterns[] = [
-            'from' => $t['from'],
-            'to' => $t['to'],
-            'timeframe' => $avg_months . ' months',
-            'count' => $t['count']
+            'from' => $t['from'], 'to' => $t['to'], 'count' => $t['count'],
+            'timeframe' => $t['months'] ? round(array_sum($t['months']) / count($t['months'])) . ' months' : 'N/A',
         ];
     }
-    $source = 'history';
+    if ($patterns) $source = 'history';
 }
 
-// If no history data, try to get from current employment (common positions)
+// ---- 2. Fallback: most common current positions (survey + profile) ----
 if (empty($patterns)) {
-    $current = $pdo->query("
-        SELECT position, COUNT(*) as cnt
-        FROM employment
-        WHERE position IS NOT NULL AND position != ''
-        GROUP BY position
-        ORDER BY cnt DESC
-        LIMIT 10
-    ")->fetchAll();
-
-    if (!empty($current)) {
-        foreach ($current as $c) {
-            $patterns[] = [
-                'from' => 'N/A (current)',
-                'to' => $c['position'],
-                'timeframe' => 'Current',
-                'count' => $c['cnt']
-            ];
+    $counts = [];
+    foreach (getAlumniProfiles($pdo) as $p) {
+        if ($p['working'] && $p['position']) {
+            $k = strtolower($p['position']);
+            if (!isset($counts[$k])) $counts[$k] = ['label' => $p['position'], 'n' => 0];
+            $counts[$k]['n']++;
         }
-        $source = 'current';
     }
+    uasort($counts, fn($a, $b) => $b['n'] <=> $a['n']);
+    foreach (array_slice($counts, 0, 10) as $c) {
+        $patterns[] = ['from' => 'N/A (current)', 'to' => $c['label'], 'timeframe' => 'Current', 'count' => $c['n']];
+    }
+    if ($patterns) $source = 'current';
 }
 
-// Sort patterns by count descending
 usort($patterns, fn($a, $b) => $b['count'] <=> $a['count']);
+
+$chart_labels = array_map(fn($p) => $source == 'history' ? $p['from'] . ' → ' . $p['to'] : $p['to'], $patterns);
+$chart_counts = array_column($patterns, 'count');
 ?>
 <div class="page-header">
     <h1>Career Path Patterns</h1>
-    <p class="text-muted">
-        <?php if ($source == 'history'): ?>
-            Based on alumni employment history
-        <?php elseif ($source == 'current'): ?>
-            Based on current employment positions (no historical data)
-        <?php else: ?>
-            No employment data available yet.
-        <?php endif; ?>
+    <p class="text-muted mb-0">
+        <?php if ($source == 'history'): ?>Based on alumni employment history
+        <?php elseif ($source == 'current'): ?>Based on current positions (no employment history recorded yet)
+        <?php else: ?>No employment data available yet.<?php endif; ?>
     </p>
 </div>
 
 <?php if (empty($patterns)): ?>
-    <div class="alert alert-info">No employment data available. Please update employment records.</div>
+    <div class="alert alert-info">No position data yet. Positions come from the Tracer Survey ("Job Title/Description") or the alumni profile.</div>
 <?php else: ?>
-    <!-- Chart Section -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Career Path Transitions Visualization</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="careerChart" style="max-height: 400px;"></canvas>
-                </div>
+    <div class="card mb-4">
+        <div class="card-header">Career Path Visualization</div>
+        <div class="card-body">
+            <div class="chart-container" style="height: 380px;">
+                <canvas id="careerChart"></canvas>
             </div>
         </div>
     </div>
 
-    <!-- Table Section -->
     <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Detailed Career Path Data</h5>
-        </div>
+        <div class="card-header">Detailed Career Path Data</div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-hover">
                     <thead class="table-light">
-                        <tr>
-                            <th>From Position</th>
-                            <th>To Position</th>
-                            <th>Average Timeframe</th>
-                            <th>Number of Alumni</th>
-                        </tr>
+                        <tr><th>From Position</th><th>To Position</th><th>Average Timeframe</th><th>Number of Alumni</th></tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($patterns as $p): ?>
+                    <?php foreach ($patterns as $p): ?>
                         <tr>
                             <td><?= htmlspecialchars($p['from']) ?></td>
                             <td><?= htmlspecialchars($p['to']) ?></td>
-                            <td><?= $p['timeframe'] ?></td>
+                            <td><?= htmlspecialchars($p['timeframe']) ?></td>
                             <td><?= $p['count'] ?></td>
                         </tr>
-                        <?php endforeach; ?>
+                    <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-<?php endif; ?>
 
-<!-- Chart.js Script -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    <?php if (!empty($patterns)): ?>
-    const ctx = document.getElementById('careerChart').getContext('2d');
-    
-    // Prepare data for chart
-    const labels = [
-        <?php foreach ($patterns as $p): ?>
-            '<?= addslashes($p['from']) ?> → <?= addslashes($p['to']) ?>',
-        <?php endforeach; ?>
-    ];
-    
-    const counts = [
-        <?php foreach ($patterns as $p): ?>
-            <?= $p['count'] ?>,
-        <?php endforeach; ?>
-    ];
-    
-    // Generate colors for bars
-    const colors = counts.map((_, index) => {
-        const hue = (index * 30) % 360;
-        return `hsla(${hue}, 70%, 60%, 0.7)`;
-    });
-    
-    const borderColors = counts.map((_, index) => {
-        const hue = (index * 30) % 360;
-        return `hsla(${hue}, 70%, 60%, 1)`;
-    });
-    
-    new Chart(ctx, {
+    const labels = <?= json_encode($chart_labels) ?>;   // json_encode = safe, no broken quotes / XSS
+    const counts = <?= json_encode($chart_counts) ?>;
+    new Chart(document.getElementById('careerChart'), {
         type: 'bar',
         data: {
             labels: labels,
             datasets: [{
                 label: 'Number of Alumni',
                 data: counts,
-                backgroundColor: colors,
-                borderColor: borderColors,
-                borderWidth: 1
+                backgroundColor: counts.map((_, i) => `hsla(${(i * 30) % 360}, 60%, 55%, 0.75)`)
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
-                title: {
-                    display: true,
-                    text: '<?= $source == "history" ? "Career Path Transitions" : "Current Employment Positions" ?>',
-                    font: {
-                        size: 16
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `Alumni: ${context.parsed.y}`;
-                        }
-                    }
-                }
+                legend: { display: false },
+                datalabels: { display: false },
+                title: { display: true, text: <?= json_encode($source == 'history' ? 'Career Path Transitions' : 'Current Positions') ?> }
             },
             scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        stepSize: 1,
-                        callback: function(value) {
-                            return Math.floor(value) === value ? value : '';
-                        }
-                    },
-                    title: {
-                        display: true,
-                        text: 'Number of Alumni'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: '<?= $source == "history" ? "Career Transitions" : "Position" ?>'
-                    },
-                    ticks: {
-                        maxRotation: 45,
-                        minRotation: 0
-                    }
-                }
+                y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 }, title: { display: true, text: 'Number of Alumni' } },
+                x: { ticks: { maxRotation: 45, minRotation: 0 } }
             }
         }
     });
-    <?php endif; ?>
 });
 </script>
+<?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

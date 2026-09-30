@@ -1,77 +1,82 @@
 <?php
 require_once '../includes/admin_header.php';
+require_once '../includes/mining_helpers.php';
 
-// Get program-industry combinations from employment data
-$data = $pdo->query("
-    SELECT a.program, e.industry, COUNT(*) as cnt
-    FROM alumni a
-    JOIN employment e ON a.id = e.alumni_id
-    WHERE e.industry IS NOT NULL AND e.industry != ''
-    GROUP BY a.program, e.industry
-")->fetchAll();
+/*
+ * Rule: "graduates of PROGRAM work in INDUSTRY"
+ * Only alumni who are working AND have an industry are counted, so support,
+ * confidence and lift all use the same base (the old page mixed all alumni
+ * with employed-only counts, which made lift wrong).
+ */
+$working = array_values(array_filter(getAlumniProfiles($pdo), fn($p) => $p['working'] && $p['industry']));
+$N = count($working);
 
-// Calculate total alumni per program and per industry for support/confidence
-$total_alumni = $pdo->query("SELECT COUNT(*) FROM alumni")->fetchColumn();
-$program_counts = $pdo->query("SELECT program, COUNT(*) as cnt FROM alumni GROUP BY program")->fetchAll(PDO::FETCH_KEY_PAIR);
-$industry_counts = $pdo->query("SELECT industry, COUNT(*) as cnt FROM employment WHERE industry IS NOT NULL GROUP BY industry")->fetchAll(PDO::FETCH_KEY_PAIR);
-
-$rules = [];
-foreach ($data as $row) {
-    $program = $row['program'];
-    $industry = $row['industry'];
-    $count = $row['cnt'];
-    
-    $support = $total_alumni ? round(($count / $total_alumni) * 100, 1) : 0;
-    $confidence = isset($program_counts[$program]) ? round(($count / $program_counts[$program]) * 100, 1) : 0;
-    $expected = isset($industry_counts[$industry]) ? $industry_counts[$industry] / $total_alumni : 0;
-    $lift = $expected ? round($confidence / 100 / $expected, 2) : 0;
-    $strength = $lift > 1.2 ? 'Strong' : ($lift > 0.8 ? 'Moderate' : 'Weak');
-    
-    $rules[] = [
-        'program' => $program,
-        'industry' => $industry,
-        'support' => $support,
-        'confidence' => $confidence,
-        'lift' => $lift,
-        'strength' => $strength
-    ];
+$programCounts = $industryCounts = $pairs = [];
+foreach ($working as $p) {
+    $programCounts[$p['program']]   = ($programCounts[$p['program']] ?? 0) + 1;
+    $industryCounts[$p['industry']] = ($industryCounts[$p['industry']] ?? 0) + 1;
+    $key = $p['program'] . '|' . $p['industry'];
+    $pairs[$key] = ($pairs[$key] ?? 0) + 1;
 }
 
-// Sort by lift descending
-usort($rules, fn($a, $b) => $b['lift'] <=> $a['lift']);
+$rules = [];
+foreach ($pairs as $key => $count) {
+    [$program, $industry] = explode('|', $key, 2);
+    $support    = $count / $N;
+    $confidence = $count / $programCounts[$program];
+    $expected   = $industryCounts[$industry] / $N;
+    $lift       = $expected ? $confidence / $expected : 0;
+    $rules[] = [
+        'program'    => $program,
+        'industry'   => $industry,
+        'count'      => $count,
+        'support'    => round($support * 100, 1),
+        'confidence' => round($confidence * 100, 1),
+        'lift'       => round($lift, 2),
+        'strength'   => $lift > 1.2 ? 'Strong' : ($lift >= 0.8 ? 'Moderate' : 'Weak'),
+    ];
+}
+usort($rules, fn($a, $b) => [$b['lift'], $b['count']] <=> [$a['lift'], $a['count']]);
 ?>
 <div class="page-header">
     <h1>Association Rules</h1>
-    <p class="text-muted">Program-Industry Association (based on employment data)</p>
+    <p class="text-muted mb-0">Program → Industry (<?= $N ?> working alumni with a known industry)</p>
 </div>
 
 <?php if (empty($rules)): ?>
-    <div class="alert alert-warning">No association data available. Please ensure employment records include industry.</div>
-<?php endif; ?>
-
+    <div class="alert alert-warning">No association data yet. Alumni need to be Employed/Self-Employed with an industry (from the Tracer Survey job category or their profile).</div>
+<?php else: ?>
 <div class="card">
     <div class="card-body">
-        <table class="table">
-            <thead>
-                <tr><th>Program</th><th>Industry</th><th>Support (%)</th><th>Confidence (%)</th><th>Lift</th><th>Strength</th></tr>
-            </thead>
-            <tbody>
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr><th>Program</th><th>Industry</th><th>Alumni</th><th>Support (%)</th><th>Confidence (%)</th><th>Lift</th><th>Strength</th></tr>
+                </thead>
+                <tbody>
                 <?php foreach ($rules as $r): ?>
-                <tr>
-                    <td><?= htmlspecialchars($r['program']) ?></td>
-                    <td><?= htmlspecialchars($r['industry']) ?></td>
-                    <td><?= $r['support'] ?></td>
-                    <td><?= $r['confidence'] ?></td>
-                    <td><?= $r['lift'] ?></td>
-                    <td><span class="badge bg-<?= $r['strength']=='Strong'?'success':($r['strength']=='Moderate'?'warning':'secondary') ?>"><?= $r['strength'] ?></span></td>
-                </tr>
+                    <tr>
+                        <td><?= htmlspecialchars($r['program']) ?></td>
+                        <td><?= htmlspecialchars($r['industry']) ?></td>
+                        <td><?= $r['count'] ?></td>
+                        <td><?= $r['support'] ?></td>
+                        <td><?= $r['confidence'] ?></td>
+                        <td><?= $r['lift'] ?></td>
+                        <td><span class="badge bg-<?= $r['strength'] == 'Strong' ? 'success' : ($r['strength'] == 'Moderate' ? 'warning' : 'secondary') ?>"><?= $r['strength'] ?></span></td>
+                    </tr>
                 <?php endforeach; ?>
-            </tbody>
-        </table>
-        <div class="alert alert-info mt-3">
-            <strong>Understanding Metrics:</strong> Support – frequency of combination; Confidence – probability that a graduate from the program works in that industry; Lift – how much more likely than random (>1 is positive association).
+                </tbody>
+            </table>
+        </div>
+        <div class="alert alert-info mt-3 mb-0">
+            <strong>Understanding the metrics:</strong>
+            <b>Support</b> – share of all working alumni with this program + industry.
+            <b>Confidence</b> – chance a graduate of the program works in that industry.
+            <b>Lift</b> – how much more likely than random (above 1 = positive association).
+            <?php if ($N < 20): ?><br><em>Only <?= $N ?> records so far, so treat these as indicative until more alumni respond.</em><?php endif; ?>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>
