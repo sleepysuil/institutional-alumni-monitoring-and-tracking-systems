@@ -7,9 +7,16 @@ require_once '../includes/mining_helpers.php';
  * tracer survey or profile), the usual approach in tracer studies. Alumni with
  * no data no longer drag the rates down.
  */
+$all_profiles = getAlumniProfiles($pdo);
+$program_list = array_values(array_unique(array_column($all_profiles, 'program')));
+sort($program_list);
+$program = $_GET['program'] ?? '';
+if (!in_array($program, $program_list, true)) $program = '';
+
 $byYear = [];
-foreach (getAlumniProfiles($pdo) as $p) {
+foreach ($all_profiles as $p) {
     if (!$p['year']) continue;
+    if ($program !== '' && $p['program'] !== $program) continue;
     $y = $p['year'];
     $byYear[$y] ??= ['total' => 0, 'resp' => 0, 'employed' => 0, 'self' => 0, 'unemployed' => 0];
     $byYear[$y]['total']++;
@@ -47,8 +54,19 @@ $latest = end($trends);
 ?>
 <div class="page-header">
     <h1>Employment Trend Analysis</h1>
-    <p class="text-muted mb-0">By graduation year, based on survey and profile responses</p>
+    <p class="text-muted mb-0">By graduation year, based on survey and profile responses<?= $program !== '' ? ' · ' . htmlspecialchars($program) : '' ?></p>
 </div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <select name="program" class="form-select" onchange="this.form.submit()">
+            <option value="">All programs</option>
+            <?php foreach ($program_list as $pl): ?>
+                <option value="<?= htmlspecialchars($pl) ?>" <?= $program === $pl ? 'selected' : '' ?>><?= htmlspecialchars($pl) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+</form>
 
 <?php if (empty($trends)): ?>
     <div class="alert alert-info">No alumni records yet.</div>
@@ -116,7 +134,7 @@ document.addEventListener('DOMContentLoaded', function() {
     new Chart(document.getElementById('trendChart'), {
         type: 'line',
         data: {
-            labels: <?= json_encode(array_column($trends, 'year')) ?>,
+            labels: <?= json_encode(array_column($trends, 'year'), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
             datasets: [
                 ds('Employed',      <?= json_encode(array_column($trends, 'employed_rate')) ?>,      '#28a745'),
                 ds('Self-Employed', <?= json_encode(array_column($trends, 'self_employed_rate')) ?>, '#17a2b8'),

@@ -2,29 +2,42 @@
 require_once '../includes/alumni_header.php';
 require_once '../includes/pagination.php';
 $alumni_id = $_SESSION['alumni_id'];
+if (empty($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_post'])) {
-    $content = trim(cleanInput($_POST['content'] ?? ''));
-    if ($content === '') {
-        $_SESSION['message'] = "Post cannot be empty.";
-    } else {
-        $pdo->prepare("INSERT INTO alumni_posts (alumni_id, content, posted_date) VALUES (?, ?, NOW())")->execute([$alumni_id, $content]);
-        $_SESSION['message'] = "Your update was posted.";
-    }
-    redirect('newsfeed.php' . (isset($_GET['filter']) ? '?filter=' . $_GET['filter'] : ''));
-}
-if (isset($_GET['delete_post'])) {
-    $pdo->prepare("DELETE FROM alumni_posts WHERE id = ? AND alumni_id = ?")->execute([$_GET['delete_post'], $alumni_id]);
-    $_SESSION['message'] = "Post deleted.";
-    redirect('newsfeed.php' . (isset($_GET['filter']) ? '?filter=' . $_GET['filter'] : ''));
-}
-
+// Whitelist the filter (it is reused in redirects and links)
+$valid_filters = ['all', 'posts', 'jobs', 'announcements'];
 $filter = $_GET['filter'] ?? 'all';
+if (!in_array($filter, $valid_filters, true)) $filter = 'all';
+$filter_qs = $filter !== 'all' ? '?filter=' . $filter : '';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) {
+        $_SESSION['message'] = "Invalid request. Please try again.";
+        redirect('newsfeed.php' . $filter_qs);
+    }
+
+    if (isset($_POST['add_post'])) {
+        $content = trim(cleanInput($_POST['content'] ?? ''));
+        if ($content === '') {
+            $_SESSION['message'] = "Post cannot be empty.";
+        } elseif (mb_strlen($content) > 1000) {
+            $_SESSION['message'] = "Post is too long (max 1000 characters).";
+        } else {
+            $pdo->prepare("INSERT INTO alumni_posts (alumni_id, content, posted_date) VALUES (?, ?, NOW())")->execute([$alumni_id, $content]);
+            $_SESSION['message'] = "Your update was posted.";
+        }
+    } elseif (isset($_POST['delete_post'])) {
+        $pdo->prepare("DELETE FROM alumni_posts WHERE id = ? AND alumni_id = ?")->execute([(int)$_POST['delete_post'], $alumni_id]);
+        $_SESSION['message'] = "Post deleted.";
+    }
+    redirect('newsfeed.php' . $filter_qs);
+}
+
 $page = getCurrentPage();
 $limit = 8;
 
 $announcements = $pdo->query("SELECT 'announcement' as type, id, title, content as description, posted_date, NULL as company, NULL as alumni_id, NULL as profile_pic FROM announcements ORDER BY posted_date DESC LIMIT 100")->fetchAll();
-$jobs = $pdo->query("SELECT 'job' as type, id, title, description, posted_date, company, NULL as alumni_id, NULL as profile_pic FROM job_postings WHERE status='active' ORDER BY posted_date DESC LIMIT 100")->fetchAll();
+$jobs = $pdo->query("SELECT 'job' as type, id, title, description, posted_date, company, NULL as alumni_id, NULL as profile_pic FROM job_postings WHERE status='active' AND (deadline IS NULL OR deadline >= CURDATE()) ORDER BY posted_date DESC LIMIT 100")->fetchAll();
 $posts_raw = $pdo->query("
     SELECT p.id, p.content, p.posted_date, p.alumni_id, a.first_name, a.last_name, a.profile_pic
     FROM alumni_posts p JOIN alumni a ON p.alumni_id = a.id
@@ -66,14 +79,15 @@ $me = $me->fetch();
         <div class="card mb-3">
             <div class="card-body">
                 <form method="post">
+                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                     <div class="d-flex align-items-start gap-3">
                         <?php if (!empty($me['profile_pic']) && file_exists('../' . $me['profile_pic'])): ?>
-                            <img src="<?= SITE_URL ?>/<?= $me['profile_pic'] ?>" alt="You" class="rounded-circle" style="width: 45px; height: 45px; object-fit: cover;">
+                            <img src="<?= SITE_URL ?>/<?= htmlspecialchars($me['profile_pic']) ?>" alt="You" class="rounded-circle" style="width: 45px; height: 45px; object-fit: cover;">
                         <?php else: ?>
                             <i class="fas fa-user-circle fa-2x" style="color: var(--primary);"></i>
                         <?php endif; ?>
                         <div class="flex-grow-1">
-                            <textarea name="content" class="form-control" rows="2" placeholder="Share an update with fellow alumni..." required></textarea>
+                            <textarea name="content" class="form-control" rows="2" maxlength="1000" placeholder="Share an update with fellow alumni..." required></textarea>
                         </div>
                     </div>
                     <div class="text-end mt-2">
@@ -98,7 +112,7 @@ $me = $me->fetch();
                             <i class="fas fa-bullhorn fa-2x text-warning me-3"></i>
                         <?php else: ?>
                             <?php if (!empty($item['profile_pic']) && file_exists('../' . $item['profile_pic'])): ?>
-                                <img src="<?= SITE_URL ?>/<?= $item['profile_pic'] ?>" alt="" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
+                                <img src="<?= SITE_URL ?>/<?= htmlspecialchars($item['profile_pic']) ?>" alt="" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
                             <?php else: ?>
                                 <i class="fas fa-user-circle fa-2x text-secondary me-3"></i>
                             <?php endif; ?>
@@ -114,18 +128,23 @@ $me = $me->fetch();
                                 <?= htmlspecialchars($item['title']) ?> <span class="badge bg-secondary fw-normal">Alumni Post</span>
                             <?php endif; ?>
                         </h5>
+                        <?php $desc = $item['description'] ?? ''; ?>
                         <p class="card-text">
                             <?php if ($item['type'] == 'post'): ?>
-                                <?= nl2br(htmlspecialchars($item['description'])) ?>
+                                <?= nl2br(htmlspecialchars($desc)) ?>
                             <?php else: ?>
-                                <?= nl2br(htmlspecialchars(substr($item['description'], 0, 200))) ?><?= strlen($item['description']) > 200 ? '...' : '' ?>
+                                <?= nl2br(htmlspecialchars(mb_substr($desc, 0, 200))) ?><?= mb_strlen($desc) > 200 ? '...' : '' ?>
                             <?php endif; ?>
                         </p>
                         <p class="small text-muted mb-2"><i class="far fa-clock me-1"></i> <?= timeAgo($item['posted_date']) ?></p>
                         <?php if ($item['type'] == 'job'): ?>
                             <a href="job_details.php?id=<?= $item['id'] ?>" class="btn btn-sm btn-primary">View Job</a>
                         <?php elseif ($item['type'] == 'post' && $item['alumni_id'] == $alumni_id): ?>
-                            <a href="?delete_post=<?= $item['id'] ?><?= $filter != 'all' ? '&filter=' . $filter : '' ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this post?')"><i class="fas fa-trash"></i> Delete</a>
+                            <form method="post" action="newsfeed.php<?= $filter_qs ?>" class="d-inline" onsubmit="return confirm('Delete this post?')">
+                                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                <input type="hidden" name="delete_post" value="<?= $item['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i> Delete</button>
+                            </form>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -150,6 +169,7 @@ $me = $me->fetch();
             <div class="card-header">Quick Links</div>
             <ul class="list-group list-group-flush">
                 <li class="list-group-item"><a href="job_opportunities.php">Browse All Jobs</a></li>
+                <li class="list-group-item"><a href="application_status.php">My Applications</a></li>
                 <li class="list-group-item"><a href="profile.php">Update Profile</a></li>
                 <li class="list-group-item"><a href="tracer_survey.php">Take Tracer Survey</a></li>
             </ul>

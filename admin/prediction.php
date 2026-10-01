@@ -18,6 +18,7 @@ $ci = [0, 0];
 $sample = 0;
 $note = '';
 $industries = [];
+$year_rates = [];
 
 if ($selected_program) {
     $rows = array_values(array_filter($profiles, fn($p) => $p['program'] === $selected_program));
@@ -61,6 +62,14 @@ if ($selected_program) {
     foreach ($rows as $p) if ($p['working'] && $p['industry']) $counts[$p['industry']] = ($counts[$p['industry']] ?? 0) + 1;
     arsort($counts);
     $industries = array_slice(array_keys($counts), 0, 3);
+
+    // ---- Employment rate of each graduating class (context for the prediction) ----
+    foreach ($rows as $p) {
+        if ($p['status'] === null || !$p['year']) continue;
+        $year_rates[$p['year']]['n'] = ($year_rates[$p['year']]['n'] ?? 0) + 1;
+        $year_rates[$p['year']]['w'] = ($year_rates[$p['year']]['w'] ?? 0) + ($p['working'] ? 1 : 0);
+    }
+    ksort($year_rates);
 }
 $pred_display = $prediction ?? 0;
 ?>
@@ -81,7 +90,7 @@ $pred_display = $prediction ?? 0;
             </div>
             <div class="col-md-5">
                 <label class="form-label">Graduation Year</label>
-                <input type="number" name="grad_year" class="form-control" value="<?= $grad_year ?>">
+                <input type="number" name="grad_year" min="1970" max="2100" class="form-control" value="<?= $grad_year ?>">
             </div>
             <div class="col-md-2 align-self-end">
                 <button type="submit" class="btn btn-primary w-100">Predict</button>
@@ -115,14 +124,40 @@ $pred_display = $prediction ?? 0;
         <div class="card">
             <div class="card-header">Confidence Interval</div>
             <div class="card-body">
+                <?php if ($prediction === null): ?>
+                    <p class="text-muted mb-0">The chart appears once there are responses for this program.</p>
+                <?php else: ?>
                 <div class="chart-container">
                     <canvas id="predictionChart"></canvas>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
 
+<?php if ($year_rates): ?>
+<div class="card mt-4">
+    <div class="card-header">Employment Rate by Graduating Class: <?= htmlspecialchars($selected_program) ?></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Class of</th><th>Responses</th><th>Employed / Self-Employed</th><th style="width:40%">Rate</th></tr></thead>
+                <tbody>
+                <?php foreach ($year_rates as $yr => $v): $r = round($v['w'] / $v['n'] * 100, 1); ?>
+                    <tr>
+                        <td><?= (int)$yr ?></td><td><?= $v['n'] ?></td><td><?= $v['w'] ?></td>
+                        <td><div class="progress" style="height:18px;"><div class="progress-bar" style="width: <?= $r ?>%; background:#388087;"><?= $r ?>%</div></div></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($prediction !== null): ?>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     new Chart(document.getElementById('predictionChart'), {
@@ -144,5 +179,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

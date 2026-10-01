@@ -1,144 +1,187 @@
 <?php
 require_once '../includes/admin_header.php';
 
-$id = $_GET['id'] ?? 0;
+$total_alumni = (int)$pdo->query("SELECT COUNT(*) FROM alumni")->fetchColumn();
+$employed = (int)$pdo->query("SELECT COUNT(*) FROM employment WHERE status IN ('Employed','Self-Employed')")->fetchColumn();
+$employment_rate = $total_alumni ? round(($employed / $total_alumni) * 100, 1) : 0;
+// Only jobs that are active AND not past their deadline
+$active_jobs = (int)$pdo->query("SELECT COUNT(*) FROM job_postings WHERE status='active' AND (deadline IS NULL OR deadline >= CURDATE())")->fetchColumn();
 
-$message = $pdo->prepare("SELECT * FROM messages WHERE id = ?");
-$message->execute([$id]);
-$message = $message->fetch();
-if (!$message) redirect('message_history.php');
+$industry = $pdo->query("SELECT industry, COUNT(*) as cnt FROM employment WHERE industry IS NOT NULL AND industry <> '' GROUP BY industry ORDER BY cnt DESC LIMIT 1")->fetch();
+$top_industry = $industry ? $industry['industry'] : 'N/A';
 
-// Get recipient details with delivery status
-$recipients = $pdo->prepare("
-    SELECT mr.*, a.first_name, a.last_name, a.email, a.phone
-    FROM message_recipients mr
-    JOIN alumni a ON mr.alumni_id = a.id
-    WHERE mr.message_id = ?
-");
-$recipients->execute([$id]);
-$recipients = $recipients->fetchAll();
+$recent = $pdo->query("SELECT * FROM alumni ORDER BY id DESC LIMIT 5")->fetchAll();
 
-$sent_count = count(array_filter($recipients, function($r) use ($message) {
-    if ($message['type'] == 'email') return $r['email_status'] == 'sent';
-    if ($message['type'] == 'sms') return $r['sms_status'] == 'sent';
-    return $r['email_status'] == 'sent' || $r['sms_status'] == 'sent';
-}));
+$dist = $pdo->query("SELECT status, COUNT(*) as count FROM employment GROUP BY status")->fetchAll();
+$status_counts = [];
+foreach ($dist as $row) $status_counts[$row['status']] = (int)$row['count'];
+$categories = ['Employed', 'Self-Employed', 'Unemployed', 'Pursuing Higher Education'];
+$chart_data = [];
+foreach ($categories as $cat) $chart_data[$cat] = $status_counts[$cat] ?? 0;
 
-$failed_count = count(array_filter($recipients, function($r) use ($message) {
-    if ($message['type'] == 'email') return $r['email_status'] == 'failed';
-    if ($message['type'] == 'sms') return $r['sms_status'] == 'failed';
-    return $r['email_status'] == 'failed' || $r['sms_status'] == 'failed';
-}));
+// ---- Things that need the admin's attention ----
+$pending_approvals = (int)$pdo->query("SELECT COUNT(*) FROM alumni WHERE is_approved = 0 AND approval_status = 'pending'")->fetchColumn();
+$pending_apps = (int)$pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
+$no_survey = (int)$pdo->query("SELECT COUNT(*) FROM alumni a WHERE NOT EXISTS (SELECT 1 FROM tracer_responses t WHERE t.alumni_id = a.id)")->fetchColumn();
+$expiring = (int)$pdo->query("SELECT COUNT(*) FROM job_postings WHERE status='active' AND deadline BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)")->fetchColumn();
+
+// ---- Recent activity ----
+$recent_apps = $pdo->query("SELECT a.applied_date, a.status, j.title, al.first_name, al.last_name
+                            FROM applications a
+                            JOIN job_postings j ON a.job_id = j.id
+                            JOIN alumni al ON a.alumni_id = al.id
+                            ORDER BY a.applied_date DESC LIMIT 5")->fetchAll();
+
+$e = fn($v) => htmlspecialchars((string)($v ?? ''));
 ?>
 <div class="page-header">
-    <h1>Message Delivery Report</h1>
-    <a href="message_history.php" class="btn btn-outline"><i class="fas fa-arrow-left me-2"></i>Back</a>
+    <h1>Dashboard</h1>
 </div>
 
-<!-- Summary Cards -->
-<div class="row g-4 mb-4">
-    <div class="col-md-3">
+<?php if ($pending_approvals || $pending_apps || $expiring): ?>
+<div class="row g-3 mb-4">
+    <?php if ($pending_approvals): ?>
+    <div class="col-md-4"><a href="settings.php" class="text-decoration-none">
+        <div class="alert alert-warning mb-0"><i class="fas fa-user-clock me-2"></i><strong><?= $pending_approvals ?></strong> alumni registration<?= $pending_approvals > 1 ? 's' : '' ?> awaiting approval</div>
+    </a></div>
+    <?php endif; ?>
+    <?php if ($pending_apps): ?>
+    <div class="col-md-4"><a href="applications.php?status=pending" class="text-decoration-none">
+        <div class="alert alert-info mb-0"><i class="fas fa-inbox me-2"></i><strong><?= $pending_apps ?></strong> job application<?= $pending_apps > 1 ? 's' : '' ?> to review</div>
+    </a></div>
+    <?php endif; ?>
+    <?php if ($expiring): ?>
+    <div class="col-md-4"><a href="job_postings.php" class="text-decoration-none">
+        <div class="alert alert-secondary mb-0"><i class="fas fa-hourglass-half me-2"></i><strong><?= $expiring ?></strong> job posting<?= $expiring > 1 ? 's' : '' ?> closing within 7 days</div>
+    </a></div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<div class="row g-4">
+    <div class="col-6 col-md-3">
         <div class="stat-card primary">
-            <div class="stat-title">Total Recipients</div>
-            <div class="stat-value"><?= count($recipients) ?></div>
-            <div class="stat-label">Alumni targeted</div>
+            <div class="stat-title">Total Alumni</div>
+            <div class="stat-value"><?= $total_alumni ?></div>
+            <div class="stat-label"><?= $no_survey ?> have not taken the survey</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <div class="stat-card teal">
-            <div class="stat-title">Sent Successfully</div>
-            <div class="stat-value"><?= $sent_count ?></div>
-            <div class="stat-label">Messages delivered</div>
+            <div class="stat-title">Employment Rate</div>
+            <div class="stat-value"><?= $employment_rate ?>%</div>
+            <div class="stat-label"><?= $employed ?> of <?= $total_alumni ?> employed</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <div class="stat-card purple">
-            <div class="stat-title">Failed</div>
-            <div class="stat-value"><?= $failed_count ?></div>
-            <div class="stat-label">Delivery failed</div>
+            <div class="stat-title">Open Jobs</div>
+            <div class="stat-value"><?= $active_jobs ?></div>
+            <div class="stat-label">Active and not expired</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-md-3">
         <div class="stat-card emerald">
-            <div class="stat-title">Success Rate</div>
-            <div class="stat-value"><?= count($recipients) > 0 ? round(($sent_count / count($recipients)) * 100, 1) : 0 ?>%</div>
-            <div class="stat-label">Delivery rate</div>
+            <div class="stat-title">Top Industry</div>
+            <div class="stat-value" style="font-size: 1.4rem;"><?= $e($top_industry) ?></div>
+            <div class="stat-label">Most common</div>
         </div>
     </div>
 </div>
 
-<!-- Message Details -->
-<div class="card mb-4">
-    <div class="card-header">Message Information</div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>Subject:</strong> <?= htmlspecialchars($message['subject'] ?? 'N/A') ?></p>
-                <p><strong>Type:</strong> <?= $message['type'] ?></p>
-                <p><strong>Category:</strong> <?= $message['category'] ?></p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Created:</strong> <?= date('M j, Y H:i', strtotime($message['created_at'])) ?></p>
-                <?php if ($message['scheduled_at']): ?>
-                    <p><strong>Scheduled:</strong> <?= date('M j, Y H:i', strtotime($message['scheduled_at'])) ?></p>
-                <?php endif; ?>
-                <?php if ($message['sent_at']): ?>
-                    <p><strong>Sent:</strong> <?= date('M j, Y H:i', strtotime($message['sent_at'])) ?></p>
-                <?php endif; ?>
+<div class="row mt-4 g-4">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between"><span>Recent Alumni Registrations</span><a href="alumni_directory.php" class="small">View all</a></div>
+            <div class="card-body p-0">
+                <?php if (!$recent): ?><p class="text-muted p-3 mb-0">No alumni yet.</p><?php endif; ?>
+                <?php foreach ($recent as $al): ?>
+                <div class="alumni-item">
+                    <?php if (!empty($al['profile_pic']) && file_exists('../' . $al['profile_pic'])): ?>
+                        <img src="<?= SITE_URL ?>/<?= $e($al['profile_pic']) ?>" alt="Profile" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover; margin-right: 1rem;">
+                    <?php else: ?>
+                        <i class="fas fa-user-circle fa-2x" style="color: var(--primary); margin-right: 1rem;"></i>
+                    <?php endif; ?>
+                    <div class="alumni-info">
+                        <a href="view_alumni.php?id=<?= (int)$al['id'] ?>" class="alumni-name"><?= $e($al['first_name'] . ' ' . $al['last_name']) ?></a>
+                        <br><small><?= $e($al['program']) ?> • Class of <?= (int)$al['graduation_year'] ?></small>
+                    </div>
+                </div>
+                <?php endforeach; ?>
             </div>
         </div>
-        <div class="mt-3">
-            <strong>Content:</strong>
-            <div class="border p-2 bg-light rounded mt-1"><?= nl2br(htmlspecialchars($message['content'])) ?></div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between"><span>Latest Job Applications</span><a href="applications.php" class="small">View all</a></div>
+            <ul class="list-group list-group-flush">
+                <?php if (!$recent_apps): ?><li class="list-group-item text-muted">No applications yet.</li><?php endif; ?>
+                <?php foreach ($recent_apps as $ra):
+                    $b = ['pending' => 'warning', 'reviewed' => 'info', 'accepted' => 'success', 'rejected' => 'danger'][$ra['status']] ?? 'secondary'; ?>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><?= $e($ra['first_name'] . ' ' . $ra['last_name']) ?> <small class="text-muted">applied for <?= $e($ra['title']) ?> · <?= date('M j', strtotime($ra['applied_date'])) ?></small></span>
+                    <span class="badge bg-<?= $b ?>"><?= ucfirst($ra['status']) ?></span>
+                </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Employment Status Distribution</div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="employmentChart"></canvas>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <span class="badge" style="background:#388087;">Employed (<?= $chart_data['Employed'] ?>)</span>
+                    <span class="badge" style="background:#6FB3B3;">Self-Employed (<?= $chart_data['Self-Employed'] ?>)</span>
+                    <span class="badge" style="background:#BADFE7; color:#1f4f4f;">Unemployed (<?= $chart_data['Unemployed'] ?>)</span>
+                    <span class="badge" style="background:#C2EDCE; color:#1f4f4f;">Higher Ed (<?= $chart_data['Pursuing Higher Education'] ?>)</span>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Recipient List -->
-<div class="card">
-    <div class="card-header">Recipient Delivery Status</div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Phone</th>
-                        <th>Email Status</th>
-                        <th>SMS Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($recipients as $r): ?>
-                    <tr>
-                        <td><?= htmlspecialchars($r['first_name'] . ' ' . $r['last_name']) ?></td>
-                        <td><?= htmlspecialchars($r['email']) ?></td>
-                        <td><?= htmlspecialchars($r['phone']) ?></td>
-                        <td>
-                            <?php if ($message['type'] == 'email' || $message['type'] == 'both'): ?>
-                                <span class="badge bg-<?= $r['email_status'] == 'sent' ? 'success' : ($r['email_status'] == 'failed' ? 'danger' : 'secondary') ?>">
-                                    <?= $r['email_status'] ?>
-                                </span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary">N/A</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php if ($message['type'] == 'sms' || $message['type'] == 'both'): ?>
-                                <span class="badge bg-<?= $r['sms_status'] == 'sent' ? 'success' : ($r['sms_status'] == 'failed' ? 'danger' : 'secondary') ?>">
-                                    <?= $r['sms_status'] ?>
-                                </span>
-                            <?php else: ?>
-                                <span class="badge bg-secondary">N/A</span>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('employmentChart');
+    if (!ctx) return;
+    try {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Employed', 'Self-Employed', 'Unemployed', 'Higher Education'],
+                datasets: [{
+                    data: [<?= $chart_data['Employed'] ?>, <?= $chart_data['Self-Employed'] ?>, <?= $chart_data['Unemployed'] ?>, <?= $chart_data['Pursuing Higher Education'] ?>],
+                    backgroundColor: ['#388087', '#6FB3B3', '#BADFE7', '#C2EDCE'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12 } },
+                    datalabels: {
+                        display: c => c.dataset.data[c.dataIndex] > 0,   // no "0.0%" bubbles on empty slices
+                        color: '#fff',
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        borderRadius: 3,
+                        padding: { top: 2, bottom: 2, left: 4, right: 4 },
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value, context) => {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            return total > 0 ? ((value / total) * 100).toFixed(1) + '%' : '';
+                        }
+                    }
+                }
+            }
+        });
+    } catch (e) {
+        ctx.insertAdjacentHTML('afterend', '<div class="alert alert-warning">Chart could not be loaded. Please check that Chart.js is included.</div>');
+    }
+});
+</script>
 
 <?php include '../includes/footer.php'; ?>

@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && !isset($already_submitted)) {
                                job_title = VALUES(job_title),
                                company = VALUES(company),
                                industry = VALUES(industry),
-                               relevance = VALUES(relevance),n n
+                               relevance = VALUES(relevance),
                                survey_data = VALUES(survey_data),
                                proof_file = VALUES(proof_file)");
     if ($stmt->execute([$alumni_id, $is_employed, $job_title, $company, $industry, $relevance, json_encode($survey_data), $proof_file])) {

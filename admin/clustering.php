@@ -98,6 +98,7 @@ if ($n >= 2) {
             'year'   => round(array_sum(array_column($g, 'year')) / count($g)),
             'salary' => round(array_sum($sal) / count($sal)),
             'min'    => min($sal), 'max' => max($sal),
+            'members' => array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name']], $g),
         ];
     }
 }
@@ -141,6 +142,14 @@ $has_data = $n >= 2;
                     <li><strong>Avg Salary:</strong> ₱<?= number_format($c['salary']) ?></li>
                     <li><strong>Range:</strong> ₱<?= number_format($c['min']) ?> – ₱<?= number_format($c['max']) ?></li>
                 </ul>
+                <details class="mt-2 small">
+                    <summary>View alumni in this cluster</summary>
+                    <ul class="mb-0 mt-1">
+                        <?php foreach ($c['members'] as $m): ?>
+                            <li><a href="view_alumni.php?id=<?= (int)$m['id'] ?>"><?= htmlspecialchars($m['name']) ?></a></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </details>
             </div>
         </div>
         <?php endforeach; ?>
@@ -152,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const datasets = <?= json_encode(array_map(fn($c) => [
         'label' => $c['name'], 'data' => $c['points'],
         'backgroundColor' => $c['color'], 'pointRadius' => 7, 'pointHoverRadius' => 9,
-    ], $clusters)) ?>;
+    ], $clusters), JSON_HEX_TAG | JSON_HEX_AMP) ?>;
     new Chart(document.getElementById('clusterChart'), {
         type: 'scatter',
         data: { datasets: datasets },

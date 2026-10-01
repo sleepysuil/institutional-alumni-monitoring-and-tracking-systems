@@ -49,6 +49,13 @@ foreach ($profiles as $p) {
 
 usort($flagged, fn($a, $b) => $b['sort'] <=> $a['sort']);
 $badge = ['high' => 'danger', 'medium' => 'warning', 'low' => 'success'];
+
+// Optional priority filter (?level=high|medium|low)
+$level_filter = $_GET['level'] ?? 'all';
+if (!isset($badge[$level_filter])) $level_filter = 'all';
+$shown = $level_filter === 'all'
+    ? $flagged
+    : array_values(array_filter($flagged, fn($f) => $f['level'] === $level_filter));
 ?>
 <div class="page-header">
     <h1>Anomaly Detection</h1>
@@ -87,17 +94,24 @@ $badge = ['high' => 'danger', 'medium' => 'warning', 'low' => 'success'];
     <p class="text-muted small">Based on <?= $n ?> salary records. Average ₱<?= number_format($avg) ?>, standard deviation ₱<?= number_format($std) ?>. With few records, very high z-scores are mathematically impossible, so more data gives better results.</p>
 <?php endif; ?>
 
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="?level=all" class="btn btn-sm <?= $level_filter === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">All (<?= count($flagged) ?>)</a>
+    <?php foreach (['high', 'medium', 'low'] as $lv): ?>
+        <a href="?level=<?= $lv ?>" class="btn btn-sm <?= $level_filter === $lv ? 'btn-' . $badge[$lv] : 'btn-outline-' . $badge[$lv] ?>"><?= ucfirst($lv) ?> (<?= $counts[$lv] ?>)</a>
+    <?php endforeach; ?>
+</div>
+
 <div class="card">
-    <div class="card-header">Flagged Alumni (<?= count($flagged) ?>)</div>
+    <div class="card-header">Flagged Alumni (<?= count($shown) ?>)</div>
     <div class="card-body">
-        <?php if (empty($flagged)): ?>
+        <?php if (empty($shown)): ?>
             <p class="text-muted mb-0">No anomalies detected.</p>
         <?php else: ?>
         <div class="table-responsive">
             <table class="table">
                 <thead><tr><th>Alumni</th><th>Program</th><th>Anomaly</th><th>Detail</th><th>Priority</th></tr></thead>
                 <tbody>
-                <?php foreach ($flagged as $f): ?>
+                <?php foreach ($shown as $f): ?>
                     <tr>
                         <td><a href="view_alumni.php?id=<?= $f['id'] ?>"><?= htmlspecialchars($f['name']) ?></a></td>
                         <td><?= htmlspecialchars($f['program']) ?></td>

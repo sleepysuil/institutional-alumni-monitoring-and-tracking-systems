@@ -70,6 +70,39 @@ function gapRecommendations(array $g): array {
     <div class="alert alert-warning">No alumni data available yet.</div>
 <?php endif; ?>
 
+<?php if (!empty($stats)):
+    $overview = [];
+    foreach ($stats as $prog => $g) {
+        $overview[] = [
+            'program' => $prog, 'total' => $g['total'], 'resp' => $g['resp'],
+            'emp' => $g['resp'] ? round($g['working'] / $g['resp'] * 100, 1) : null,
+            'rel' => $g['rated'] ? round($g['relevant'] / $g['rated'] * 100, 1) : null,
+        ];
+    }
+    usort($overview, fn($a, $b) => ($a['emp'] ?? -1) <=> ($b['emp'] ?? -1));   // weakest first
+?>
+<div class="card mb-4">
+    <div class="card-header">Program Overview <small class="text-muted">· lowest employment rate first</small></div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Program</th><th>Alumni</th><th>Responded</th><th>Employment rate</th><th>Highly relevant jobs</th></tr></thead>
+                <tbody>
+                <?php foreach ($overview as $o): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($o['program']) ?></td>
+                        <td><?= $o['total'] ?></td><td><?= $o['resp'] ?></td>
+                        <td><?= $o['emp'] === null ? '<span class="text-muted">n/a</span>' : $o['emp'] . '%' ?></td>
+                        <td><?= $o['rel'] === null ? '<span class="text-muted">n/a</span>' : $o['rel'] . '%' ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php foreach ($stats as $program => $g):
     $empRate = $g['resp'] ? round($g['working'] / $g['resp'] * 100, 1) : 0;
     $relRate = $g['rated'] ? round($g['relevant'] / $g['rated'] * 100, 1) : null;

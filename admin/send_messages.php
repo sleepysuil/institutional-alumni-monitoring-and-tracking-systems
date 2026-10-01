@@ -1,111 +1,160 @@
 <?php
 require_once '../includes/admin_header.php';
 require_once '../includes/notifications.php';
+if (empty($_SESSION['csrf_token'])) $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
-// Handle sending message
+$categories = ['event' => '🎉 Event Announcement', 'survey' => '📊 Survey Reminder', 'employment' => '💼 Employment Follow-Up', 'welcome' => '👋 Welcome Message', 'general' => '📢 General Notification'];
+$type_options = ['sms' => '📱 SMS Only', 'email' => '📧 Email Only', 'both' => '📱📧 Both'];
+
+/** Replace {first_name}, {last_name}, {program}, {year} with the recipient's details. */
+function personalize($text, $r) {
+    return strtr($text, [
+        '{first_name}' => $r['first_name'] ?? '',
+        '{last_name}'  => $r['last_name'] ?? '',
+        '{program}'    => $r['program'] ?? '',
+        '{year}'       => $r['graduation_year'] ?? '',
+    ]);
+}
+
+/** Uses your email sender from includes/notifications.php if one exists. Returns null when none is configured. */
+function sendEmailToRecipient($to, $subject, $body) {
+    foreach (['sendEmailMessage', 'sendEmail', 'sendEmailNotification'] as $fn) {
+        if (function_exists($fn)) return (bool)$fn($to, $subject, $body);
+    }
+    return null;
+}
+
+// Send immediately; records the real result per channel (the old version marked email-only
+// messages as "SMS sent" and never sent email at all)
+function sendMessagesNow($message_id, $recipients, $type, $subject, $content) {
+    global $pdo;
+    $uses_sms = in_array($type, ['sms', 'both'], true);
+    $uses_email = in_array($type, ['email', 'both'], true);
+    $ok = $fail = 0;
+    $now = date('Y-m-d H:i:s');
+
+    foreach ($recipients as $r) {
+        $body = personalize($content, $r);
+        $subj = personalize($subject, $r);
+        $errors = [];
+        $sets = []; $vals = [];
+        $all_ok = true;
+
+        if ($uses_sms) {
+            if (empty($r['phone'])) { $s = false; $errors[] = 'No phone number'; }
+            else { $s = (bool)sendSMSMessage($r['phone'], $body); if (!$s) $errors[] = 'SMS sending failed'; }
+            $sets[] = "sms_status = ?, sms_sent_at = ?";
+            array_push($vals, $s ? 'sent' : 'failed', $s ? $now : null);
+            $all_ok = $all_ok && $s;
+        }
+        if ($uses_email) {
+            if (empty($r['email'])) { $m = false; $errors[] = 'No email address'; }
+            else {
+                $res = sendEmailToRecipient($r['email'], $subj, $body);
+                if ($res === null) { $m = false; $errors[] = 'Email sender not configured'; }
+                else { $m = $res; if (!$m) $errors[] = 'Email sending failed'; }
+            }
+            $sets[] = "email_status = ?, email_sent_at = ?";
+            array_push($vals, $m ? 'sent' : 'failed', $m ? $now : null);
+            $all_ok = $all_ok && $m;
+        }
+        $sets[] = "error_message = ?";
+        $vals[] = $errors ? implode('; ', $errors) : null;
+        array_push($vals, $message_id, $r['id']);
+        $pdo->prepare("UPDATE message_recipients SET " . implode(', ', $sets) . " WHERE message_id = ? AND alumni_id = ?")->execute($vals);
+        $all_ok ? $ok++ : $fail++;
+    }
+
+    // sent = everyone succeeded, failed = nobody did, partial = mixed
+    $status = $fail === 0 ? 'sent' : ($ok === 0 ? 'failed' : 'partial');
+    $pdo->prepare("UPDATE messages SET status = ?, sent_at = NOW() WHERE id = ?")->execute([$status, $message_id]);
+    return [$ok, $fail];
+}
+
+// Form values: from a template / "Reuse" link, or what was typed if there was an error
+$form = [
+    'subject'  => $_GET['subject'] ?? '',
+    'content'  => $_GET['content'] ?? '',
+    'type'     => array_key_exists($_GET['type'] ?? '', $type_options) ? $_GET['type'] : 'sms',
+    'category' => array_key_exists($_GET['category'] ?? '', $categories) ? $_GET['category'] : 'event',
+    'schedule_date' => '', 'schedule_time' => '',
+];
+$preselected = [];
+$error = '';
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['send_message'])) {
-    $subject = cleanInput($_POST['subject'] ?? '');
-    $content = cleanInput($_POST['content']);
-    $type = $_POST['message_type'];
-    $category = $_POST['category'];
-    $schedule_date = $_POST['schedule_date'] ?? '';
-    $schedule_time = $_POST['schedule_time'] ?? '';
-    
-    // Get selected recipients from checklist
-    $selected_alumni = $_POST['selected_alumni'] ?? [];
-    
-    if (empty($selected_alumni)) {
+    $form = [
+        'subject'  => trim($_POST['subject'] ?? ''),
+        'content'  => trim($_POST['content'] ?? ''),
+        'type'     => $_POST['message_type'] ?? '',
+        'category' => $_POST['category'] ?? '',
+        'schedule_date' => trim($_POST['schedule_date'] ?? ''),
+        'schedule_time' => trim($_POST['schedule_time'] ?? ''),
+    ];
+    $preselected = array_values(array_unique(array_filter(array_map('intval', $_POST['selected_alumni'] ?? []))));
+
+    $scheduled_at = null;
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) {
+        $error = "Invalid request. Please try again.";
+    } elseif (!array_key_exists($form['type'], $type_options) || !array_key_exists($form['category'], $categories)) {
+        $error = "Please choose a valid message type and category.";
+    } elseif ($form['content'] === '') {
+        $error = "Message content is required.";
+    } elseif (empty($preselected)) {
         $error = "Please select at least one recipient.";
-    } else {
-        // Get alumni details for selected IDs
-        $placeholders = implode(',', array_fill(0, count($selected_alumni), '?'));
-        $stmt = $pdo->prepare("SELECT id, email, phone FROM alumni WHERE id IN ($placeholders)");
-        $stmt->execute($selected_alumni);
+    } elseif (in_array($form['type'], ['email', 'both'], true) && $form['subject'] === '') {
+        $error = "A subject is required for email messages.";
+    } elseif ($form['schedule_date'] !== '' || $form['schedule_time'] !== '') {
+        $dt = DateTime::createFromFormat('Y-m-d H:i', $form['schedule_date'] . ' ' . $form['schedule_time']);
+        if (!$dt) $error = "Please set both a valid schedule date and time, or leave both empty.";
+        elseif ($dt <= new DateTime()) $error = "The scheduled time must be in the future.";
+        else $scheduled_at = $dt->format('Y-m-d H:i:s');
+    }
+
+    if (!$error) {
+        $subject = cleanInput($form['subject']);
+        $content = cleanInput($form['content']);
+
+        $placeholders = implode(',', array_fill(0, count($preselected), '?'));
+        $stmt = $pdo->prepare("SELECT id, first_name, last_name, program, graduation_year, email, phone FROM alumni WHERE id IN ($placeholders)");
+        $stmt->execute($preselected);
         $recipients = $stmt->fetchAll();
-        
-        // Save message to database
-        $recipient_ids = array_column($recipients, 'id');
-        $recipient_list = implode(',', $recipient_ids);
-        
-        $scheduled_at = null;
-        if ($schedule_date && $schedule_time) {
-            $scheduled_at = $schedule_date . ' ' . $schedule_time . ':00';
-        }
-        
-        $stmt = $pdo->prepare("INSERT INTO messages (subject, content, type, category, recipients, recipient_count, scheduled_at, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)");
-        $stmt->execute([$subject, $content, $type, $category, $recipient_list, count($recipients), $scheduled_at, $_SESSION['user_id']]);
+
+        $recipient_list = implode(',', array_column($recipients, 'id'));
+        $pdo->prepare("INSERT INTO messages (subject, content, type, category, recipients, recipient_count, scheduled_at, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)")
+            ->execute([$subject, $content, $form['type'], $form['category'], $recipient_list, count($recipients), $scheduled_at, $_SESSION['user_id']]);
         $message_id = $pdo->lastInsertId();
-        
-        // Add recipients to message_recipients table
-        foreach ($recipients as $recipient) {
-            $stmt = $pdo->prepare("INSERT INTO message_recipients (message_id, alumni_id, recipient_type) VALUES (?, ?, ?)");
-            $stmt->execute([$message_id, $recipient['id'], $type]);
+
+        $ins = $pdo->prepare("INSERT INTO message_recipients (message_id, alumni_id, recipient_type) VALUES (?, ?, ?)");
+        foreach ($recipients as $r) $ins->execute([$message_id, $r['id'], $form['type']]);
+
+        if ($scheduled_at) {
+            $_SESSION['message'] = "Message scheduled for " . date('M j, Y g:i A', strtotime($scheduled_at)) . " to " . count($recipients) . " recipients. It stays Pending until it is sent.";
+        } else {
+            [$ok, $fail] = sendMessagesNow($message_id, $recipients, $form['type'], $subject, $content);
+            $_SESSION['message'] = "Message processed: $ok delivered" . ($fail ? ", $fail failed (see Message History for details)" : "") . ".";
+            if ($fail) $_SESSION['message_type'] = $ok ? 'warning' : 'danger';
         }
-        
-        // If not scheduled, send immediately
-        if (!$scheduled_at) {
-            sendMessagesNow($message_id, $recipients, $type, $subject, $content);
-        }
-        
-        $_SESSION['message'] = "Message " . ($scheduled_at ? "scheduled" : "sent") . " successfully to " . count($recipients) . " recipients.";
         redirect('send_messages.php');
     }
 }
 
-// Function to send messages immediately
-function sendMessagesNow($message_id, $recipients, $type, $subject, $content) {
-    global $pdo;
-    
-    foreach ($recipients as $recipient) {
-        $sms_success = true;
-        $sms_error = null;
-        
-        if ($type == 'sms' || $type == 'both') {
-            if (!empty($recipient['phone'])) {
-                $sms_success = sendSMSMessage($recipient['phone'], $content);
-                if (!$sms_success) $sms_error = "SMS sending failed";
-            } else {
-                $sms_success = false;
-                $sms_error = "No phone number";
-            }
-        }
-        
-        // Update recipient status
-        $stmt = $pdo->prepare("UPDATE message_recipients SET 
-            sms_status = ?, 
-            sms_sent_at = CASE WHEN ? = 'sent' THEN NOW() ELSE NULL END,
-            error_message = ?
-            WHERE message_id = ? AND alumni_id = ?");
-        $stmt->execute([
-            $sms_success ? 'sent' : 'failed',
-            $sms_success ? 'sent' : 'failed',
-            $sms_error,
-            $message_id,
-            $recipient['id']
-        ]);
-    }
-    
-    // Update main message status
-    $pdo->prepare("UPDATE messages SET status = 'sent', sent_at = NOW() WHERE id = ?")->execute([$message_id]);
-}
-
-// Get all alumni with employment status for checklist
+// Alumni checklist
 $alumni_list = $pdo->query("
-    SELECT a.*, 
-           COALESCE(e.status, 'No Data') as employment_status
+    SELECT a.*, COALESCE(e.status, 'No Data') as employment_status
     FROM alumni a
     LEFT JOIN employment e ON a.id = e.alumni_id
     ORDER BY a.last_name
 ")->fetchAll();
 
-// Get filters for quick selection
 $courses = $pdo->query("SELECT DISTINCT program FROM alumni ORDER BY program")->fetchAll(PDO::FETCH_COLUMN);
 $years = $pdo->query("SELECT DISTINCT graduation_year FROM alumni ORDER BY graduation_year DESC")->fetchAll(PDO::FETCH_COLUMN);
 $employment_statuses = ['Employed', 'Self-Employed', 'Unemployed', 'Pursuing Higher Education', 'No Data'];
 
-$error = $error ?? '';
 $message = $_SESSION['message'] ?? '';
-unset($_SESSION['message']);
+$message_type = $_SESSION['message_type'] ?? 'success';
+unset($_SESSION['message'], $_SESSION['message_type']);
+$e = fn($v) => htmlspecialchars((string)($v ?? ''));
 ?>
 <div class="page-header">
     <h1>Send Messages</h1>
@@ -117,12 +166,8 @@ unset($_SESSION['message']);
     <li><a class="nav-link" href="message_templates.php">Templates</a></li>
 </ul>
 
-<?php if ($message): ?>
-    <div class="alert alert-success"><?= $message ?></div>
-<?php endif; ?>
-<?php if ($error): ?>
-    <div class="alert alert-danger"><?= $error ?></div>
-<?php endif; ?>
+<?php if ($message): ?><div class="alert alert-<?= $e($message_type) ?>"><?= $e($message) ?></div><?php endif; ?>
+<?php if ($error): ?><div class="alert alert-danger"><?= $e($error) ?></div><?php endif; ?>
 
 <div class="row">
     <!-- Compose Message Form -->
@@ -131,58 +176,51 @@ unset($_SESSION['message']);
             <div class="card-header">Compose Message</div>
             <div class="card-body">
                 <form method="post" id="messageForm">
-                    <!-- Message Type -->
+                    <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+
                     <div class="mb-3">
                         <label class="form-label">Message Type</label>
                         <select name="message_type" class="form-select" required>
-                            <option value="sms">📱 SMS Only</option>
-                            <option value="email">📧 Email Only</option>
-                            <option value="both">📱📧 Both</option>
+                            <?php foreach ($type_options as $v => $l): ?>
+                                <option value="<?= $v ?>" <?= $form['type'] === $v ? 'selected' : '' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
-                    
-                    <!-- Category -->
+
                     <div class="mb-3">
                         <label class="form-label">Category</label>
                         <select name="category" class="form-select" required>
-                            <option value="event">🎉 Event Announcement</option>
-                            <option value="survey">📊 Survey Reminder</option>
-                            <option value="employment">💼 Employment Follow-Up</option>
-                            <option value="welcome">👋 Welcome Message</option>
-                            <option value="general">📢 General Notification</option>
+                            <?php foreach ($categories as $v => $l): ?>
+                                <option value="<?= $v ?>" <?= $form['category'] === $v ? 'selected' : '' ?>><?= $l ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
-                    
-                    <!-- Subject -->
+
                     <div class="mb-3">
                         <label class="form-label">Subject</label>
-                        <input type="text" name="subject" class="form-control" placeholder="Message subject (for email)">
+                        <input type="text" name="subject" class="form-control" maxlength="200" placeholder="Required for email" value="<?= $e($form['subject']) ?>">
                     </div>
-                    
-                    <!-- Content -->
+
                     <div class="mb-3">
                         <label class="form-label">Message Content</label>
-                        <textarea name="content" class="form-control" rows="5" required placeholder="Write your message here..."></textarea>
-                        <small class="text-muted">For SMS, messages are limited to 160 characters per segment.</small>
+                        <textarea name="content" id="contentBox" class="form-control" rows="5" required placeholder="Write your message here..."><?= $e($form['content']) ?></textarea>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">Personalize with {first_name}, {last_name}, {program}, {year}</small>
+                            <small class="text-muted" id="charCounter">0 characters</small>
+                        </div>
                     </div>
-                    
-                    <!-- Load Template Button -->
+
                     <div class="mb-3">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#templateModal">
                             <i class="fas fa-file-alt"></i> Load Template
                         </button>
                     </div>
-                    
-                    <!-- Scheduling -->
+
                     <div class="mb-3">
                         <label class="form-label">Schedule (Optional)</label>
                         <div class="row">
-                            <div class="col-md-6">
-                                <input type="date" name="schedule_date" class="form-control">
-                            </div>
-                            <div class="col-md-6">
-                                <input type="time" name="schedule_time" class="form-control">
-                            </div>
+                            <div class="col-md-6"><input type="date" name="schedule_date" class="form-control" min="<?= date('Y-m-d') ?>" value="<?= $e($form['schedule_date']) ?>"></div>
+                            <div class="col-md-6"><input type="time" name="schedule_time" class="form-control" value="<?= $e($form['schedule_time']) ?>"></div>
                         </div>
                         <small class="text-muted">Leave empty to send immediately.</small>
                     </div>
@@ -190,7 +228,7 @@ unset($_SESSION['message']);
             </div>
         </div>
     </div>
-    
+
     <!-- Recipient Selection Checklist -->
     <div class="col-md-7">
         <div class="card">
@@ -259,12 +297,12 @@ unset($_SESSION['message']);
                             <tr class="recipient-row" 
                                 data-name="<?= htmlspecialchars($al['first_name'] . ' ' . $al['last_name']) ?>"
                                 data-course="<?= htmlspecialchars($al['program']) ?>"
-                                data-year="<?= $al['graduation_year'] ?>"
+                                data-year="<?= (int)$al['graduation_year'] ?>"
                                 data-status="<?= htmlspecialchars($al['employment_status']) ?>">
-                                <td><input type="checkbox" class="recipient-checkbox" value="<?= $al['id'] ?>"></td>
+                                <td><input type="checkbox" class="recipient-checkbox" value="<?= (int)$al['id'] ?>" <?= in_array((int)$al['id'], $preselected, true) ? 'checked' : '' ?>></td>
                                 <td><?= htmlspecialchars($al['first_name'] . ' ' . $al['last_name']) ?></td>
                                 <td><?= htmlspecialchars($al['program']) ?></td>
-                                <td><?= $al['graduation_year'] ?></td>
+                                <td><?= (int)$al['graduation_year'] ?></td>
                                 <td>
                                     <?php
                                     if ($al['employment_status'] == 'Employed') {
@@ -319,13 +357,14 @@ unset($_SESSION['message']);
                             foreach ($templates as $t): ?>
                             <tr>
                                 <td><?= htmlspecialchars($t['name']) ?></td>
-                                <td><?= $t['category'] ?></td>
-                                <td><?= $t['type'] ?></td>
+                                <td><?= htmlspecialchars($t['category']) ?></td>
+                                <td><?= htmlspecialchars($t['type']) ?></td>
                                 <td>
                                     <button class="btn btn-sm btn-primary load-template" 
-                                            data-subject="<?= htmlspecialchars($t['subject']) ?>"
+                                            data-subject="<?= htmlspecialchars($t['subject'] ?? '') ?>"
+                                            data-category="<?= htmlspecialchars($t['category']) ?>"
                                             data-content="<?= htmlspecialchars($t['content']) ?>"
-                                            data-type="<?= $t['type'] ?>">
+                                            data-type="<?= htmlspecialchars($t['type']) ?>">
                                         <i class="fas fa-download"></i> Load
                                     </button>
                                 </td>
@@ -368,8 +407,8 @@ function syncSelectedRecipients() {
         alert('Please select at least one recipient.');
         return false;
     }
-    
-    return true;
+
+    return confirm('Send this message to ' + selected.length + ' alumni?');
 }
 
 // Update selected count
@@ -481,6 +520,9 @@ loadButtons.forEach(function(btn) {
         document.querySelector('input[name="subject"]').value = this.dataset.subject;
         document.querySelector('textarea[name="content"]').value = this.dataset.content;
         
+        if (this.dataset.category) document.querySelector('select[name="category"]').value = this.dataset.category;
+        updateCharCounter();
+
         const type = this.dataset.type;
         const typeSelect = document.querySelector('select[name="message_type"]');
         if (type === 'sms') typeSelect.value = 'sms';
@@ -491,6 +533,15 @@ loadButtons.forEach(function(btn) {
         modal.hide();
     });
 });
+
+// Character / SMS segment counter
+function updateCharCounter() {
+    const n = document.getElementById('contentBox').value.length;
+    const segs = Math.max(1, Math.ceil(n / 160));
+    document.getElementById('charCounter').textContent = n + ' characters (' + segs + ' SMS segment' + (segs > 1 ? 's' : '') + ')';
+}
+document.getElementById('contentBox').addEventListener('input', updateCharCounter);
+updateCharCounter();
 
 // Initial counts
 updateSelectedCount();

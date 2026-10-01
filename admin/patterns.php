@@ -31,10 +31,13 @@ if ($history) {
                 $transitions[$key] = ['from' => $from, 'to' => $to, 'count' => 0, 'months' => []];
             }
             $transitions[$key]['count']++;
-            try {
-                $d = (new DateTime($steps[$i]['date']))->diff(new DateTime($steps[$i + 1]['date']));
-                $transitions[$key]['months'][] = $d->y * 12 + $d->m;
-            } catch (Exception $e) {}
+            // Skip missing dates (new DateTime(null) would silently mean "today")
+            if ($steps[$i]['date'] && $steps[$i + 1]['date']) {
+                try {
+                    $d = (new DateTime($steps[$i]['date']))->diff(new DateTime($steps[$i + 1]['date']));
+                    $transitions[$key]['months'][] = $d->y * 12 + $d->m;
+                } catch (Exception $e) {}
+            }
         }
     }
     foreach ($transitions as $t) {
@@ -65,8 +68,11 @@ if (empty($patterns)) {
 
 usort($patterns, fn($a, $b) => $b['count'] <=> $a['count']);
 
-$chart_labels = array_map(fn($p) => $source == 'history' ? $p['from'] . ' → ' . $p['to'] : $p['to'], $patterns);
-$chart_counts = array_column($patterns, 'count');
+// The chart shows the 10 most common paths so labels stay readable; the table lists all
+$top = array_slice($patterns, 0, 10);
+$chart_labels = array_map(fn($p) => $source == 'history' ? $p['from'] . ' → ' . $p['to'] : $p['to'], $top);
+$chart_counts = array_column($top, 'count');
+$total_alumni_paths = array_sum(array_column($patterns, 'count'));
 ?>
 <div class="page-header">
     <h1>Career Path Patterns</h1>
@@ -81,7 +87,7 @@ $chart_counts = array_column($patterns, 'count');
     <div class="alert alert-info">No position data yet. Positions come from the Tracer Survey ("Job Title/Description") or the alumni profile.</div>
 <?php else: ?>
     <div class="card mb-4">
-        <div class="card-header">Career Path Visualization</div>
+        <div class="card-header">Career Path Visualization <small class="text-muted">· top <?= count($top) ?> of <?= count($patterns) ?></small></div>
         <div class="card-body">
             <div class="chart-container" style="height: 380px;">
                 <canvas id="careerChart"></canvas>
@@ -103,7 +109,7 @@ $chart_counts = array_column($patterns, 'count');
                             <td><?= htmlspecialchars($p['from']) ?></td>
                             <td><?= htmlspecialchars($p['to']) ?></td>
                             <td><?= htmlspecialchars($p['timeframe']) ?></td>
-                            <td><?= $p['count'] ?></td>
+                            <td><?= (int)$p['count'] ?> <small class="text-muted">(<?= $total_alumni_paths ? round($p['count'] / $total_alumni_paths * 100) : 0 ?>%)</small></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -114,7 +120,7 @@ $chart_counts = array_column($patterns, 'count');
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const labels = <?= json_encode($chart_labels) ?>;   // json_encode = safe, no broken quotes / XSS
+    const labels = <?= json_encode($chart_labels, JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;   // json_encode = safe, no broken quotes / XSS
     const counts = <?= json_encode($chart_counts) ?>;
     new Chart(document.getElementById('careerChart'), {
         type: 'bar',

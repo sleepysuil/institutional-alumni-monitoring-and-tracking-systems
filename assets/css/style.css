@@ -34,42 +34,8 @@ body {
     color: var(--dark);
     overflow-x: hidden;
 }
-
-/* ========== MOBILE MENU TOGGLE BUTTON ========== */
-.mobile-toggle {
-    display: none;
-    position: fixed;
-    top: 15px;
-    left: 15px;
-    z-index: 1100;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 1.2rem;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
-
-.mobile-toggle:hover {
-    background: var(--primary-dark);
-}
-
-/* Overlay when sidebar is open on mobile */
-.sidebar-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 999;
-}
-
-.sidebar-overlay.active {
-    display: block;
+@supports (overflow: clip) {
+    body { overflow-x: clip; }
 }
 
 /* ========== SIDEBAR ========== */
@@ -347,6 +313,12 @@ body {
     letter-spacing: 0.02em;
 }
 
+/* Status badges (pages print e.g. <span class="badge employed">) */
+.badge.employed { background: #388087; color: #fff; }
+.badge.self-employed { background: #6FB3B3; color: #1f4f4f; }
+.badge.unemployed { background: #c0392b; color: #fff; }
+.badge.pursuing-higher-education { background: #BADFE7; color: #1f4f4f; }
+
 /* ========== ALUMNI LIST ITEMS ========== */
 .alumni-item {
     display: flex;
@@ -451,360 +423,247 @@ body {
 }
 
 /* ================================================================
-   ================ RESPONSIVE BREAKPOINTS ========================
+   RESPONSIVE LAYER  (one consolidated system; replaces the three
+   older mobile blocks that conflicted with each other)
+
+   Breakpoints
+     >= 1200px   desktop            sidebar 260px
+     992-1199px  small desktop      sidebar 230px
+     <= 991px    tablet + phone     off-canvas sidebar + top bar
+     <= 767px    phone              single column, bigger tap targets
+     <= 575px    small phone        wide tables become cards
    ================================================================ */
 
-/* ---------- TABLETS (max-width: 991.98px) ---------- */
-@media (max-width: 991.98px) {
-    .page-header h1 {
-        font-size: 1.75rem;
-    }
-    .stat-card .stat-value {
-        font-size: 2rem;
-    }
-    .main-content {
-        padding: 1.5rem;
-    }
+/* ---------- Global safety ---------- */
+img, svg, video, canvas { max-width: 100%; }
+.card-body, .list-group-item, .alert, .modal-body { overflow-wrap: anywhere; }
+.nav-tabs { list-style: none; scrollbar-width: none; }
+.nav-tabs::-webkit-scrollbar { display: none; }
+.table thead th, .table tbody td { white-space: nowrap; }   /* desktop/tablet: scroll sideways */
+
+/* ---------- Top bar + toggle (hidden on desktop) ---------- */
+.mobile-topbar { display: none; }
+.mobile-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: .5rem;
+    background: transparent;
+    color: #fff;
+    font-size: 1.3rem;
+    cursor: pointer;
+    box-shadow: none;
+}
+.mobile-toggle:active { background: rgba(255, 255, 255, .18); }
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .5);
+    z-index: 1040;
+}
+.sidebar-overlay.active { display: block; }
+.sidebar { z-index: 1050; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* ---------- Small desktop ---------- */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    .sidebar { width: 230px; }
+    .main-content { margin-left: 230px; padding: 1.5rem; }
 }
 
-/* ---------- MOBILE (max-width: 767.98px) ---------- */
-@media (max-width: 767.98px) {
-    /* Show mobile toggle button */
-    .mobile-toggle {
-        display: block;
-    }
-
-    /* Sidebar becomes off-canvas */
-    .sidebar {
-        transform: translateX(-100%);
-        width: 260px;
-    }
-
-    .sidebar.show {
-        transform: translateX(0);
-    }
-
-    /* Main content takes full width */
-    .main-content {
-        margin-left: 0;
-        padding: 4.5rem 1rem 1rem; /* top padding for fixed toggle */
-    }
-
-    /* Page header */
-    .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-        margin-bottom: 1.25rem;
-    }
-    .page-header h1 {
-        font-size: 1.5rem;
-        padding-top: 0.25rem;
-    }
-    .page-header .btn {
-        width: 100%;
-        margin-top: 0.5rem;
-    }
-
-    /* Cards */
-    .card-body {
-        padding: 1rem;
-    }
-    .card-header {
-        padding: 0.85rem 1rem;
-        font-size: 0.95rem;
-    }
-
-    /* Stat cards – stack 2 per row */
-    .stat-card {
-        padding: 1.25rem;
-    }
-    .stat-card .stat-value {
-        font-size: 1.6rem;
-    }
-    .stat-card .stat-title {
-        font-size: 0.75rem;
-    }
-    .stat-card .stat-label {
-        font-size: 0.75rem;
-    }
-
-    /* Tables – allow horizontal scroll */
-    .table-responsive {
-        border-radius: 0.75rem;
-    }
-    .table thead th,
-    .table tbody td {
-        padding: 0.65rem 0.75rem;
-        font-size: 0.8rem;
-    }
-
-    /* Charts */
-    .chart-container {
-        height: 220px;
-    }
-
-    /* Buttons */
-    .btn {
-        padding: 0.55rem 1rem;
-        font-size: 0.9rem;
-    }
-
-    /* Tabs – horizontal scroll */
-    .nav-tabs {
-        flex-wrap: nowrap;
-    }
-    .nav-tabs .nav-link {
-        padding: 0.6rem 1rem;
-        font-size: 0.85rem;
-    }
-
-    /* Alumni list items */
-    .alumni-item i {
-        font-size: 2rem;
-    }
-    .alumni-item {
-        padding: 0.75rem;
-    }
-
-    /* Auth card */
-    .auth-card {
-        padding: 1.5rem;
-        border-radius: 1rem;
-    }
-    .auth-card h2 {
-        font-size: 1.4rem;
-    }
-
-    /* Forms */
-    .form-control, .form-select {
-        font-size: 0.95rem;
-        padding: 0.65rem 0.85rem;
-    }
-
-    /* Hide overflow on small devices */
-    body {
-        overflow-x: hidden;
-    }
-
-    /* Modal */
-    .modal-dialog {
-        margin: 0.5rem;
-    }
-}
-
-/* ---------- SMALL MOBILE (max-width: 575.98px) ---------- */
-@media (max-width: 575.98px) {
-    .main-content {
-        padding: 4.25rem 0.75rem 0.75rem;
-    }
-
-    .page-header h1 {
-        font-size: 1.3rem;
-    }
-
-    /* Stat cards – 1 per row on very small screens */
-    .stat-card {
-        padding: 1rem;
-    }
-    .stat-card .stat-value {
-        font-size: 1.5rem;
-    }
-
-    /* Table font even smaller */
-    .table thead th,
-    .table tbody td {
-        padding: 0.5rem 0.6rem;
-        font-size: 0.75rem;
-    }
-
-    /* Stack buttons inside page header */
-    .page-header .btn {
-        width: 100%;
-    }
-
-    /* Auth card */
-    .auth-card {
-        padding: 1.25rem;
-    }
-
-    /* Sidebar width for tiny screens */
-    .sidebar {
-        width: 240px;
-    }
-}
-
-@media (max-height: 500px) and (orientation: landscape) {
-    .sidebar {
-        padding-top: 0;
-    }
-    .sidebar-logo {
-        padding: 0.75rem 0.5rem;
-    }
-    .sidebar .nav-link {
-        padding: 0.5rem 1rem;
-    }
-}
-/* Scroll hint for tables on mobile */
-@media (max-width: 767.98px) {
-    .table-responsive::after {
-        content: "← Swipe to see more →";
-        display: block;
-        text-align: center;
-        font-size: 0.75rem;
-        color: #6c757d;
-        padding: 0.5rem;
-        background: #f8f9fa;
-    }
-}
-/* =====================================================
-   MOBILE / TABLET RESPONSIVENESS
-   Paste this at the END of assets/css/style.css
-   (it overrides the old @media (max-width: 768px) sidebar rules)
-   ===================================================== */
-
-/* --- Fix: original rule clipped wide tables; allow horizontal scroll --- */
-.table-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-.table thead th,
-.table tbody td { white-space: nowrap; }
-
-html, body { max-width: 100%; overflow-x: hidden; }
-img { max-width: 100%; }
-
-/* Hidden on desktop */
-.mobile-topbar,
-.sidebar-backdrop { display: none; }
-
-.sidebar { -webkit-overflow-scrolling: touch; }
-
-/* ---------- Tablet & phone: off-canvas sidebar ---------- */
+/* ---------- Tablet + phone: off-canvas sidebar ---------- */
 @media (max-width: 991.98px) {
     .mobile-topbar {
         display: flex;
         align-items: center;
-        gap: .75rem;
+        gap: .5rem;
         position: fixed;
         top: 0; left: 0; right: 0;
-        height: 56px;
-        padding: 0 1rem;
+        z-index: 1030;
+        height: calc(56px + env(safe-area-inset-top, 0px));
+        padding: env(safe-area-inset-top, 0px) calc(.5rem + env(safe-area-inset-right, 0px)) 0 calc(.5rem + env(safe-area-inset-left, 0px));
         background: var(--primary);
         color: #fff;
-        z-index: 1001;
-        box-shadow: 0 2px 8px rgba(0,0,0,.15);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
     }
-    .mobile-topbar img { height: 34px; width: auto; border-radius: 4px; }
-    .mobile-topbar .topbar-title { font-weight: 600; font-size: 1rem; }
-
-    .sidebar-toggle {
-        background: transparent;
-        border: 0;
-        color: #fff;
-        font-size: 1.4rem;
-        width: 44px; height: 44px;
-        display: inline-flex; align-items: center; justify-content: center;
-        border-radius: .5rem;
-        cursor: pointer;
+    .topbar-title {
+        font-weight: 600;
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-    .sidebar-toggle:active { background: rgba(255,255,255,.15); }
 
     .sidebar {
-        width: 260px;
+        width: min(280px, 85vw);
         transform: translateX(-100%);
-        transition: transform .3s ease;
-        z-index: 1002;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .sidebar.show { transform: translateX(0); }
+    .sidebar .nav-link { padding: .9rem 1.5rem; }          /* comfortable tap height */
 
-    .sidebar-backdrop {
-        position: fixed; inset: 0;
-        background: rgba(0,0,0,.5);
-        z-index: 1000;
-        opacity: 0; visibility: hidden;
-        transition: opacity .3s;
-    }
-    .sidebar-backdrop.show { display: block; opacity: 1; visibility: visible; }
     body.sidebar-open { overflow: hidden; }
 
     .main-content {
         margin-left: 0;
-        padding: calc(56px + 1rem) 1rem 1.5rem;
+        min-height: 100vh;
+        padding: calc(56px + env(safe-area-inset-top, 0px) + 1rem) calc(1rem + env(safe-area-inset-right, 0px)) 1.5rem calc(1rem + env(safe-area-inset-left, 0px));
+    }
+    .page-header h1 { font-size: 1.75rem; }
+    .stat-card .stat-value { font-size: 2rem; }
+
+    /* scroll hint only when a table really overflows (class added by footer.php script) */
+    .table-responsive.has-scroll::after {
+        content: "\2190  Swipe to see more  \2192";
+        display: block;
+        text-align: center;
+        font-size: .75rem;
+        color: #6c757d;
+        padding: .4rem;
+        background: #f8f9fa;
     }
 }
 
 /* ---------- Phone ---------- */
 @media (max-width: 767.98px) {
     .page-header {
-        flex-wrap: wrap;
-        gap: .75rem;
-        margin-bottom: 1.25rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .6rem;
+        margin-bottom: 1.1rem;
     }
-    .page-header h1 { font-size: 1.4rem; word-break: break-word; }
+    .page-header h1 { font-size: 1.4rem; overflow-wrap: anywhere; }
+    .page-header > .btn,
+    .page-header > form,
+    .page-header .btn-group { width: 100%; }
+    .page-header .btn-group > .btn { flex: 1; }
 
-    .card-header { padding: .85rem 1rem; }
+    .card-header { padding: .8rem 1rem; font-size: .95rem; }
     .card-body { padding: 1rem; }
 
-    /* stat cards */
-    .stat-card { padding: 1.1rem; }
-    .stat-card .stat-value { font-size: 1.75rem; word-break: break-word; }
+    .stat-card { padding: 1rem; }
+    .stat-card .stat-title,
+    .stat-card .stat-label { font-size: .7rem; }
+    .stat-card .stat-value { font-size: 1.5rem; }
 
-    /* tables */
-    .table thead th { padding: .6rem .75rem; font-size: .7rem; }
-    .table tbody td { padding: .6rem .75rem; font-size: .875rem; }
+    /* forms: 16px stops iOS zooming in on focus; 44px = comfortable tap target */
+    .form-control, .form-select, textarea { font-size: 16px; min-height: 44px; padding: .6rem .8rem; }
+    textarea.form-control { min-height: 88px; }
+    .form-check-input { width: 1.25em; height: 1.25em; }
+    .input-group > .input-group-text { font-size: .85rem; }
 
-    /* tabs scroll sideways instead of wrapping/overflowing */
-    .nav-tabs {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        white-space: nowrap;
-        padding-left: 0;
-        list-style: none;
-        -webkit-overflow-scrolling: touch;
-    }
-    .nav-tabs .nav-link { padding: .65rem 1rem; font-size: .9rem; }
+    .btn { min-height: 44px; padding: .55rem 1rem; font-size: .95rem; }
+    .btn-sm { min-height: 38px; padding: .4rem .75rem; font-size: .85rem; }
+    .btn-group { flex-wrap: wrap; }
+    .modal-footer { flex-wrap: wrap; gap: .5rem; }
+    .modal-footer > .btn { flex: 1 1 auto; }
 
-    /* charts */
-    .chart-container { height: 260px; margin: 1rem 0; }
+    /* tables that are not turned into cards: let text wrap instead of forcing a 600px minimum */
+    .table { min-width: 0; }
+    .table thead th { padding: .6rem .7rem; font-size: .7rem; }
+    .table tbody td { padding: .6rem .7rem; font-size: .85rem; white-space: normal; }
 
-    /* bigger tap targets + stop iOS zoom on focus */
-    .form-control, .form-select, textarea { font-size: 16px; }
-    .btn { padding: .65rem 1rem; }
-    .btn-sm { padding: .45rem .75rem; }
+    .nav-tabs { flex-wrap: nowrap; overflow-x: auto; margin-left: -.25rem; margin-right: -.25rem; }
+    .nav-tabs .nav-link { padding: .7rem 1rem; font-size: .9rem; }
 
-    /* Alumni directory / list cards: let badge wrap under the info */
-    .card-body > .d-flex.align-items-start { flex-wrap: wrap; }
+    .chart-container { height: 240px; margin: 1rem 0; }
+    .chart-container[style] { height: 280px !important; }     /* pages that set 380/400px inline */
 
-    /* Messages page: recipient table height */
-    #recipientTable { font-size: .8rem; }
+    .card-body > .d-flex.align-items-start { flex-wrap: wrap; }   /* alumni cards: badge drops below */
+    .alumni-item { padding: .75rem; }
+    .alumni-item i { font-size: 2rem; }
 
-    /* auth pages */
+    .pagination { flex-wrap: wrap; justify-content: center; }
+    .pagination-wrapper { text-align: center; }
+    .page-link { padding: .5rem .8rem; }
+
+    /* modals: nearly full-screen, body scrolls inside */
+    .modal-dialog { margin: .5rem; max-width: none; }
+    .modal-body { max-height: calc(100dvh - 11rem); overflow-y: auto; }
+
+    /* auth + public pages */
     .auth-wrapper { align-items: flex-start; padding: .75rem; }
     .auth-card { padding: 1.5rem 1.25rem; border-radius: 1rem; margin: auto; }
     .auth-card[style] { max-width: 100% !important; }
-
-    /* public pages (about / contact / privacy / terms) */
     .container.py-5 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
     .card.p-5 { padding: 1.5rem !important; }
     .display-5 { font-size: 1.75rem; }
-
-    /* pagination */
-    .pagination { flex-wrap: wrap; justify-content: center; }
-    .pagination-wrapper { text-align: center; }
-
-    /* modals: full width with small margin */
-    .modal-dialog { margin: .5rem; }
 }
 
-/* ---------- Small phones ---------- */
+/* ---------- Small phone: wide tables turn into stacked cards ---------- */
+@media (max-width: 575.98px) {
+    .main-content {
+        padding-left: calc(.75rem + env(safe-area-inset-left, 0px));
+        padding-right: calc(.75rem + env(safe-area-inset-right, 0px));
+    }
+    .page-header h1 { font-size: 1.25rem; }
+
+    .table-stack { min-width: 0; background: transparent; }
+    .table-stack thead {                       /* hidden visually, still read by screen readers */
+        position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .table-stack, .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+    .table-stack tr {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: .75rem;
+        padding: .25rem .9rem;
+        margin-bottom: .75rem;
+    }
+    .table-stack tbody tr:hover { background: #fff; }
+    .table-stack td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        text-align: right;
+        padding: .5rem 0;
+        border: 0;
+        border-bottom: 1px dashed var(--border);
+        font-size: .85rem;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .table-stack td:last-child { border-bottom: 0; }
+    .table-stack td::before {
+        content: attr(data-label);
+        flex: 0 0 38%;
+        max-width: 38%;
+        text-align: left;
+        font-size: .68rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--primary);
+    }
+    .table-stack td[data-label=""]::before,
+    .table-stack td[colspan]::before { display: none; }
+    .table-stack td[data-label=""] { justify-content: flex-end; flex-wrap: wrap; }   /* action buttons */
+    .table-stack td[colspan] { justify-content: center; text-align: center; }
+}
+
 @media (max-width: 400px) {
-    .page-header h1 { font-size: 1.2rem; }
-    .stat-card .stat-value { font-size: 1.5rem; }
-    .mobile-topbar .topbar-title { font-size: .9rem; }
+    .page-header h1 { font-size: 1.15rem; }
+    .stat-card .stat-value { font-size: 1.35rem; }
+    .topbar-title { font-size: .9rem; }
 }
 
-/* ---------- Touch devices: no hover "lift" (causes jitter on tap) ---------- */
+/* ---------- Phones held sideways ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .sidebar-logo { padding: .75rem .5rem; margin-bottom: .5rem; }
+    .sidebar .nav-link { padding: .5rem 1rem; }
+}
+
+/* ---------- Touch devices: no hover "lift" (jitters on tap) ---------- */
 @media (hover: none) {
-    .card:hover,
-    .team-card:hover { transform: none; }
+    .card:hover, .team-card:hover { transform: none; }
+}
+
+/* ---------- Respect "reduce motion" ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .sidebar, .card, .btn { transition: none !important; }
 }

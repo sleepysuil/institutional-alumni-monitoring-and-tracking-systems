@@ -15,36 +15,70 @@ $programCounts = $industryCounts = $pairs = [];
 foreach ($working as $p) {
     $programCounts[$p['program']]   = ($programCounts[$p['program']] ?? 0) + 1;
     $industryCounts[$p['industry']] = ($industryCounts[$p['industry']] ?? 0) + 1;
-    $key = $p['program'] . '|' . $p['industry'];
-    $pairs[$key] = ($pairs[$key] ?? 0) + 1;
+    // nested array (the old "program|industry" string key broke if a name contained "|")
+    $pairs[$p['program']][$p['industry']] = ($pairs[$p['program']][$p['industry']] ?? 0) + 1;
 }
 
 $rules = [];
-foreach ($pairs as $key => $count) {
-    [$program, $industry] = explode('|', $key, 2);
-    $support    = $count / $N;
-    $confidence = $count / $programCounts[$program];
-    $expected   = $industryCounts[$industry] / $N;
-    $lift       = $expected ? $confidence / $expected : 0;
-    $rules[] = [
-        'program'    => $program,
-        'industry'   => $industry,
-        'count'      => $count,
-        'support'    => round($support * 100, 1),
-        'confidence' => round($confidence * 100, 1),
-        'lift'       => round($lift, 2),
-        'strength'   => $lift > 1.2 ? 'Strong' : ($lift >= 0.8 ? 'Moderate' : 'Weak'),
-    ];
+foreach ($pairs as $program => $industries) {
+    foreach ($industries as $industry => $count) {
+        $support    = $count / $N;
+        $confidence = $count / $programCounts[$program];
+        $expected   = $industryCounts[$industry] / $N;
+        $lift       = $expected ? $confidence / $expected : 0;
+        $rules[] = [
+            'program'    => $program,
+            'industry'   => $industry,
+            'count'      => $count,
+            'support'    => round($support * 100, 1),
+            'confidence' => round($confidence * 100, 1),
+            'lift'       => round($lift, 2),
+            'strength'   => $lift > 1.2 ? 'Strong' : ($lift >= 0.8 ? 'Moderate' : 'Weak'),
+        ];
+    }
 }
 usort($rules, fn($a, $b) => [$b['lift'], $b['count']] <=> [$a['lift'], $a['count']]);
+
+// Filters
+$program_list = array_keys($programCounts);
+sort($program_list);
+$f_program = $_GET['program'] ?? '';
+$min_conf  = max(0, min(100, (float)($_GET['min_conf'] ?? 0)));
+$rules = array_values(array_filter($rules, fn($r) =>
+    ($f_program === '' || $r['program'] === $f_program) && $r['confidence'] >= $min_conf));
 ?>
 <div class="page-header">
     <h1>Association Rules</h1>
     <p class="text-muted mb-0">Program → Industry (<?= $N ?> working alumni with a known industry)</p>
 </div>
 
-<?php if (empty($rules)): ?>
+<?php if ($N > 0): ?>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <select name="program" class="form-select">
+            <option value="">All programs</option>
+            <?php foreach ($program_list as $pl): ?>
+                <option value="<?= htmlspecialchars($pl) ?>" <?= $f_program === $pl ? 'selected' : '' ?>><?= htmlspecialchars($pl) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <div class="input-group">
+            <span class="input-group-text">Min confidence %</span>
+            <input type="number" name="min_conf" min="0" max="100" class="form-control" value="<?= $min_conf ?>">
+        </div>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Apply</button>
+        <?php if ($f_program !== '' || $min_conf > 0): ?><a href="association.php" class="btn btn-outline-secondary">Clear</a><?php endif; ?>
+    </div>
+</form>
+<?php endif; ?>
+
+<?php if ($N === 0): ?>
     <div class="alert alert-warning">No association data yet. Alumni need to be Employed/Self-Employed with an industry (from the Tracer Survey job category or their profile).</div>
+<?php elseif (empty($rules)): ?>
+    <div class="alert alert-info">No rules match the selected filters.</div>
 <?php else: ?>
 <div class="card">
     <div class="card-body">

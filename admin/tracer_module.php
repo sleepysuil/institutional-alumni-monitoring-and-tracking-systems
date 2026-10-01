@@ -152,6 +152,12 @@ $pending_count = (int)$pdo->query("
     SELECT COUNT(*) FROM alumni a
     WHERE a.phone IS NOT NULL AND a.phone != ''
       AND NOT EXISTS (SELECT 1 FROM tracer_responses t WHERE t.alumni_id = a.id)")->fetchColumn();
+
+// Latest survey submissions
+$latest_responses = $pdo->query("
+    SELECT t.response_date, t.is_employed, a.id, a.first_name, a.last_name, a.program
+    FROM tracer_responses t JOIN alumni a ON t.alumni_id = a.id
+    ORDER BY t.response_date DESC, t.id DESC LIMIT 5")->fetchAll();
 ?>
 <div class="page-header">
     <h1>Tracer Module</h1>
@@ -316,6 +322,21 @@ $pending_count = (int)$pdo->query("
         </div>
     </div>
 
+    <div class="card mt-4">
+        <div class="card-header">Latest Survey Responses</div>
+        <ul class="list-group list-group-flush">
+            <?php if (!$latest_responses): ?><li class="list-group-item text-muted">No responses yet.</li><?php endif; ?>
+            <?php foreach ($latest_responses as $lr):
+                $lbl = ['1' => ['Employed', 'success'], '0' => ['Unemployed', 'danger'], '2' => ['Self-Employed', 'info']][(string)(int)$lr['is_employed']] ?? ['Unknown', 'secondary']; ?>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span><a href="view_alumni.php?id=<?= (int)$lr['id'] ?>" class="text-decoration-none"><?= htmlspecialchars($lr['first_name'] . ' ' . $lr['last_name']) ?></a>
+                    <small class="text-muted">· <?= htmlspecialchars($lr['program']) ?> · <?= $lr['response_date'] ? date('M j, Y', strtotime($lr['response_date'])) : '' ?></small></span>
+                <span class="badge bg-<?= $lbl[1] ?>"><?= $lbl[0] ?></span>
+            </li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+
     <div class="mt-4">
         <button class="btn btn-primary" id="sendSurveyBtn" <?= $pending_count ? '' : 'disabled' ?>>
             <i class="fas fa-paper-plane me-2"></i>Send Survey Reminder (<?= $pending_count ?> pending)
@@ -331,7 +352,7 @@ $pending_count = (int)$pdo->query("
             new Chart(ctx, {
                 type: 'pie',
                 data: {
-                    labels: <?= json_encode(array_keys($statuses)) ?>,
+                    labels: <?= json_encode(array_keys($statuses), JSON_HEX_TAG | JSON_HEX_AMP) ?>,
                     datasets: [{ data: <?= json_encode(array_values($statuses)) ?>, backgroundColor: ['#388087', '#6FB3B3', '#BADFE7', '#C2EDCE'] }]
                 },
                 options: {
@@ -369,10 +390,11 @@ $pending_count = (int)$pdo->query("
             })
             .then(r => r.json())
             .then(d => {
+                if (!d.success) btn.disabled = false;   // allow a retry after a failure
                 out.innerHTML = '<div class="alert alert-' + (d.success ? 'success' : 'danger') + '">' +
                     (d.message || d.error || 'Unknown response') + '</div>';
             })
-            .catch(() => { out.innerHTML = '<div class="alert alert-danger">Request failed. Please try again.</div>'; })
+            .catch(() => { btn.disabled = false; out.innerHTML = '<div class="alert alert-danger">Request failed. Please try again.</div>'; })
             .finally(() => {
                 btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Survey Reminder';
             });
