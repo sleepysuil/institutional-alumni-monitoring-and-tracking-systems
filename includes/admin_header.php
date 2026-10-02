@@ -2,7 +2,9 @@
 require_once __DIR__ . '/auth.php';
 if (!isAdmin()) { redirect('../index.php'); }
 include __DIR__ . '/header.php';
+include __DIR__ . '/sidebar_admin.php';
 ?>
+
 <aside class="sidebar" id="mainSidebar">
     <div class="sidebar-logo">
         <img src="<?= SITE_URL ?>/assets/img/usat-logo.jpg" alt="USAT Logo">

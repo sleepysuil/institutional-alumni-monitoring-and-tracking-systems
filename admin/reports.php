@@ -1,7 +1,8 @@
 <?php
 require_once '../includes/admin_header.php';
 
-$report_type = in_array($_GET['report_type'] ?? 'list', ['list', 'employment', 'industry'], true) ? $_GET['report_type'] : 'list';
+$report_type = $_GET['report_type'] ?? 'list';
+if (!in_array($report_type, ['list', 'employment', 'industry'], true)) $report_type = 'list';
 $year = (int)($_GET['year'] ?? 0);
 $program = trim($_GET['program'] ?? '');
 $status_options = ['Employed', 'Self-Employed', 'Unemployed', 'Pursuing Higher Education', 'No Record'];

@@ -92,7 +92,8 @@ foreach ($alumni as $a) {
         'phone'        => $a['phone'] ?? '',
     ];
 }
-$report_type = in_array($_GET['report_type'] ?? 'list', ['list', 'employment', 'industry'], true) ? $_GET['report_type'] : 'list';
+$report_type = $_GET['report_type'] ?? 'list';
+if (!in_array($report_type, ['list', 'employment', 'industry'], true)) $report_type = 'list';
 $report_title = 'Alumni Report';
 if ($report_type !== 'list') {
     // Summary reports: one row per category, matching the preview in reports.php

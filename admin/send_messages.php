@@ -42,6 +42,12 @@ function sendMessagesNow($message_id, $recipients, $type, $subject, $content) {
 
         if ($uses_sms) {
             if (empty($r['phone'])) { $s = false; $errors[] = 'No phone number'; }
+            elseif (function_exists('sendSMSViaSemaphore')) {
+                // call the sender directly so the real failure reason is recorded
+                $res = sendSMSViaSemaphore($r['phone'], plainMessageText($body));
+                $s = !empty($res['success']);
+                if (!$s) $errors[] = 'SMS failed: ' . ($res['error'] ?? 'unknown error');
+            }
             else { $s = (bool)sendSMSMessage($r['phone'], $body); if (!$s) $errors[] = 'SMS sending failed'; }
             $sets[] = "sms_status = ?, sms_sent_at = ?";
             array_push($vals, $s ? 'sent' : 'failed', $s ? $now : null);
@@ -52,7 +58,10 @@ function sendMessagesNow($message_id, $recipients, $type, $subject, $content) {
             else {
                 $res = sendEmailToRecipient($r['email'], $subj, $body);
                 if ($res === null) { $m = false; $errors[] = 'Email sender not configured'; }
-                else { $m = $res; if (!$m) $errors[] = 'Email sending failed'; }
+                else {
+                    $m = $res;
+                    if (!$m) $errors[] = (function_exists('getLastEmailError') && getLastEmailError()) ? 'Email failed: ' . getLastEmailError() : 'Email sending failed';
+                }
             }
             $sets[] = "email_status = ?, email_sent_at = ?";
             array_push($vals, $m ? 'sent' : 'failed', $m ? $now : null);

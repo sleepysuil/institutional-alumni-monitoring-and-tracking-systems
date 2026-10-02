@@ -441,6 +441,21 @@ img, svg, video, canvas { max-width: 100%; }
 .nav-tabs::-webkit-scrollbar { display: none; }
 .table thead th, .table tbody td { white-space: nowrap; }   /* desktop/tablet: scroll sideways */
 
+/* Small count bubble on sidebar items (pending approvals / applications) */
+.sidebar .nav-link .nav-badge {
+    margin-left: auto;
+    min-width: 1.4rem;
+    padding: .1rem .45rem;
+    border-radius: 2rem;
+    background: #fff;
+    color: var(--primary);
+    font-size: .7rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.3;
+}
+.sidebar .nav-link.active .nav-badge { background: var(--primary); color: #fff; }
+
 /* ---------- Top bar + toggle (hidden on desktop) ---------- */
 .mobile-topbar { display: none; }
 .mobile-toggle {

@@ -53,7 +53,7 @@ class Paginator {
             <nav aria-label="Page navigation">
                 <ul class="pagination pagination-sm mb-0">
                     <li class="page-item <?= $this->page <= 1 ? 'disabled' : '' ?>">
-                        <a class="page-link" href="<?= $this->page <= 1 ? '#' : $buildUrl($this->page - 1) ?>" aria-label="Previous">
+                        <a class="page-link" href="<?= $this->page <= 1 ? '#' : $buildUrl($this->page - 1) ?>" aria-label="Previous"<?= $this->page <= 1 ? ' tabindex="-1" aria-disabled="true" onclick="return false"' : '' ?>>
                             <i class="fas fa-chevron-left"></i>
                         </a>
                     </li>
@@ -62,12 +62,12 @@ class Paginator {
                             <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
                         <?php else: ?>
                             <li class="page-item <?= $p == $this->page ? 'active' : '' ?>">
-                                <a class="page-link" href="<?= $buildUrl($p) ?>"><?= $p ?></a>
+                                <a class="page-link" href="<?= $buildUrl($p) ?>"<?= $p == $this->page ? ' aria-current="page"' : '' ?>><?= $p ?></a>
                             </li>
                         <?php endif; ?>
                     <?php endforeach; ?>
                     <li class="page-item <?= $this->page >= $this->totalPages ? 'disabled' : '' ?>">
-                        <a class="page-link" href="<?= $this->page >= $this->totalPages ? '#' : $buildUrl($this->page + 1) ?>" aria-label="Next">
+                        <a class="page-link" href="<?= $this->page >= $this->totalPages ? '#' : $buildUrl($this->page + 1) ?>" aria-label="Next"<?= $this->page >= $this->totalPages ? ' tabindex="-1" aria-disabled="true" onclick="return false"' : '' ?>>
                             <i class="fas fa-chevron-right"></i>
                         </a>
                     </li>

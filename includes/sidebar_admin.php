@@ -1,69 +1,50 @@
-<aside class="sidebar">
+<?php
+/*
+ * Admin sidebar. Included by admin_header.php (one copy instead of two).
+ * - the right menu item now stays highlighted on sub-pages (e.g. Employment Details -> Tracer Module)
+ * - small badges show how many registrations / applications are waiting
+ */
+$current = basename($_SERVER['PHP_SELF']);
+
+$nav_badges = ['settings.php' => 0, 'applications.php' => 0];
+if (isset($pdo)) {
+    try {
+        $nav_badges['settings.php'] = (int)$pdo->query("SELECT COUNT(*) FROM alumni WHERE is_approved = 0 AND approval_status = 'pending'")->fetchColumn();
+        $nav_badges['applications.php'] = (int)$pdo->query("SELECT COUNT(*) FROM applications WHERE status = 'pending'")->fetchColumn();
+    } catch (Throwable $e) { /* columns/tables may not exist yet; no badges then */ }
+}
+
+// [link, icon, label, pages that should highlight this item]
+$nav_items = [
+    ['index.php',            'fa-tachometer-alt', 'Dashboard',        ['index.php']],
+    ['alumni_directory.php', 'fa-users',          'Alumni Directory', ['alumni_directory.php', 'view_alumni.php']],
+    ['tracer_module.php',    'fa-chart-line',     'Tracer Module',    ['tracer_module.php', 'employment_details.php', 'job_relevance.php']],
+    ['job_postings.php',     'fa-briefcase',      'Job Postings',     ['job_postings.php', 'edit_job.php']],
+    ['analytics.php',        'fa-chart-pie',      'Analytics',        ['analytics.php']],
+    ['data_mining.php',      'fa-database',       'Data Mining',      ['data_mining.php', 'clustering.php', 'association.php', 'prediction.php', 'patterns.php', 'anomalies.php', 'trends.php', 'skills_gap.php']],
+    ['reports.php',          'fa-file-alt',       'Reports',          ['reports.php']],
+    ['announcements.php',    'fa-bullhorn',       'Announcements',    ['announcements.php']],
+    ['send_messages.php',    'fa-comment-dots',   'Messages',         ['send_messages.php', 'message_history.php', 'message_templates.php', 'message_details.php']],
+    ['applications.php',     'fa-file-signature', 'Applications',     ['applications.php']],
+    ['settings.php',         'fa-cog',            'Settings',         ['settings.php']],
+];
+?>
+<aside class="sidebar" id="mainSidebar">
     <div class="sidebar-logo">
         <img src="<?= SITE_URL ?>/assets/img/usat-logo.jpg" alt="USAT Logo">
-        <div style="color: #F6F6F2; opacity: 0.8; text-align: center; font-size: 0.875rem; line-height: 1.3; margin-top: 0.5rem; padding: 0 0.5rem;">
+        <div style="color: #F6F6F2; opacity: 0.8; text-align: center; font-size: 0.8rem; margin-top: 0.5rem;">
             Institutional Alumni Monitoring<br>and Tracer System
         </div>
     </div>
-    <nav class="nav flex-column" style="overflow-y: auto; max-height: calc(100vh - 200px);">
-        <?php $current = basename($_SERVER['PHP_SELF']); ?>
-        
-        <!-- Dashboard -->
-        <a class="nav-link <?= $current == 'index.php' ? 'active' : '' ?>" href="index.php">
-            <i class="fas fa-tachometer-alt"></i> Dashboard
+    <nav class="nav flex-column" aria-label="Main navigation">
+        <?php foreach ($nav_items as [$href, $icon, $label, $pages]):
+            $is_active = in_array($current, $pages, true);
+            $badge = $nav_badges[$href] ?? 0; ?>
+        <a class="nav-link <?= $is_active ? 'active' : '' ?>" href="<?= $href ?>"<?= $is_active ? ' aria-current="page"' : '' ?>>
+            <i class="fas <?= $icon ?>"></i> <?= $label ?>
+            <?php if ($badge > 0): ?><span class="nav-badge" title="<?= $badge ?> waiting"><?= $badge > 99 ? '99+' : $badge ?></span><?php endif; ?>
         </a>
-        
-        <!-- Alumni Directory -->
-        <a class="nav-link <?= $current == 'alumni_directory.php' ? 'active' : '' ?>" href="alumni_directory.php">
-            <i class="fas fa-users"></i> Alumni Directory
-        </a>
-        
-        <!-- Tracer Module -->
-        <a class="nav-link <?= strpos($current, 'tracer_module') !== false ? 'active' : '' ?>" href="tracer_module.php">
-            <i class="fas fa-chart-line"></i> Tracer Module
-        </a>
-        
-        <!-- Job Postings -->
-        <a class="nav-link <?= $current == 'job_postings.php' ? 'active' : '' ?>" href="job_postings.php">
-            <i class="fas fa-briefcase"></i> Job Postings
-        </a>
-        
-        <!-- Analytics -->
-        <a class="nav-link <?= $current == 'analytics.php' ? 'active' : '' ?>" href="analytics.php">
-            <i class="fas fa-chart-pie"></i> Analytics
-        </a>
-        
-        <!-- Data Mining -->
-        <a class="nav-link <?= $current == 'data_mining.php' ? 'active' : '' ?>" href="data_mining.php">
-            <i class="fas fa-database"></i> Data Mining
-        </a>
-        
-        <!-- Reports -->
-        <a class="nav-link <?= $current == 'reports.php' ? 'active' : '' ?>" href="reports.php">
-            <i class="fas fa-file-alt"></i> Reports
-        </a>
-        
-        <!-- Announcements -->
-        <a class="nav-link <?= $current == 'announcements.php' ? 'active' : '' ?>" href="announcements.php">
-            <i class="fas fa-bullhorn"></i> Announcements
-        </a>
-        
-        <!-- MESSAGES MODULE - NEW -->
-        <a class="nav-link <?= strpos($current, 'send_messages') !== false || strpos($current, 'message_history') !== false || strpos($current, 'message_templates') !== false ? 'active' : '' ?>" href="send_messages.php">
-            <i class="fas fa-comment-dots"></i> Messages
-        </a>
-        
-        <!-- Applications -->
-        <a class="nav-link <?= $current == 'applications.php' ? 'active' : '' ?>" href="applications.php">
-            <i class="fas fa-file-signature"></i> Applications
-        </a>
-        
-        <!-- Settings -->
-        <a class="nav-link <?= $current == 'settings.php' ? 'active' : '' ?>" href="settings.php">
-            <i class="fas fa-cog"></i> Settings
-        </a>
-        
-        <!-- Logout -->
+        <?php endforeach; ?>
         <a class="nav-link" href="../logout.php">
             <i class="fas fa-sign-out-alt"></i> Logout
         </a>

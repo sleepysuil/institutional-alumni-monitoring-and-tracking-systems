@@ -15,13 +15,17 @@ function cleanText($s) {
     return $s === '' ? null : preg_replace('/\s+/', ' ', $s);
 }
 
-/** "₱25,000 - ₱35,000" => 30000 (midpoint). "₱30,000" => 30000. Returns null if no number. */
+/**
+ * "₱25,000 - ₱35,000" => 30000 (midpoint). "₱30,000" => 30000.
+ * Also understands "25k - 35k" (k = thousand; the old version read that as 30). Returns null if no number.
+ */
 function parseSalary($range) {
     if ($range === null || $range === '') return null;
-    if (!preg_match_all('/\d[\d,]*(?:\.\d+)?/', $range, $m)) return null;
+    if (!preg_match_all('/(\d[\d,]*(?:\.\d+)?)\s*(k)?/i', (string)$range, $m, PREG_SET_ORDER)) return null;
     $nums = [];
-    foreach ($m[0] as $n) {
-        $v = (float) str_replace(',', '', $n);
+    foreach ($m as $hit) {
+        $v = (float) str_replace(',', '', $hit[1]);
+        if (!empty($hit[2])) $v *= 1000;
         if ($v > 0) $nums[] = $v;
     }
     return $nums ? array_sum($nums) / count($nums) : null;
@@ -111,7 +115,9 @@ function getAlumniProfiles(PDO $pdo): array {
         }
 
         $skills = [];
-        foreach (($survey['skills_critical'] ?? []) as $s) {
+        $skillList = $survey['skills_critical'] ?? [];
+        if (!is_array($skillList)) $skillList = [$skillList];   // a single text answer would break foreach
+        foreach ($skillList as $s) {
             $s = cleanText($s);
             if ($s) $skills[] = $s;
         }
